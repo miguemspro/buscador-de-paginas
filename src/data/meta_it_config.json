@@ -1,0 +1,53 @@
+{
+  "empresa": {
+    "nome": "Meta IT",
+    "anos_mercado": 35,
+    "descricao": "Empresa especializada em soluções SAP e transformação digital",
+    "site": "https://www.metait.com.br",
+    "contato": {
+      "email": "contato@metait.com.br",
+      "telefone": "(11) XXXX-XXXX"
+    }
+  },
+  "produtos": [
+    {
+      "id": "sap-s4hana",
+      "nome": "Migração SAP S/4HANA",
+      "descricao": "Migração e upgrade completo para S/4HANA com metodologia ágil",
+      "segmentos_alvo": ["Serviços Financeiros", "Saúde", "Indústria Manufatura", "Comércio e Varejo"]
+    },
+    {
+      "id": "ams",
+      "nome": "AMS (Application Management Services)",
+      "descricao": "Gestão e manutenção contínua de ambientes SAP",
+      "segmentos_alvo": ["Todos"]
+    },
+    {
+      "id": "outsourcing",
+      "nome": "Outsourcing de Especialistas SAP",
+      "descricao": "Consultores funcionais e técnicos, arquitetos e líderes para reforçar squads",
+      "segmentos_alvo": ["Todos"]
+    },
+    {
+      "id": "reforma-tributaria",
+      "nome": "Adequação à Reforma Tributária",
+      "descricao": "Adequações SAP para compliance com a Reforma Tributária",
+      "segmentos_alvo": ["Serviços Financeiros", "Comércio e Varejo", "Indústria Alimenticia"]
+    },
+    {
+      "id": "rollouts",
+      "nome": "Rollouts e Implementações",
+      "descricao": "Implementação e expansão de soluções SAP",
+      "segmentos_alvo": ["Todos"]
+    }
+  ],
+  "diferenciais": [
+    "35 anos de experiência em transformação digital e soluções SAP",
+    "Operação robusta de outsourcing com consultores especializados",
+    "Atendimento a mais de 120 clientes em 25+ segmentos diferentes",
+    "Metodologia ágil com entregas incrementais",
+    "Time com especialistas funcionais, técnicos e arquitetos certificados",
+    "Expertise em todo o ciclo SAP: AMS, migração, upgrade, rollouts e melhorias"
+  ],
+  "cases": []
+}

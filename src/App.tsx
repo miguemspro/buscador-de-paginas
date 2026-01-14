@@ -1,27 +1,47 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
+import { ReactFlowProvider } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import TemplateSidebar from './components/Sidebar/TemplateSidebar';
+import ProspectCanvas from './components/Canvas/ProspectCanvas';
+import AIPanel from './components/Sidebar/AIPanel';
 
-const queryClient = new QueryClient();
+function App() {
+  return (
+    <ReactFlowProvider>
+      <div className="flex flex-col h-screen">
+        {/* Header */}
+        <header className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">SDR ProspectFlow</h1>
+              <p className="text-sm text-blue-100">
+                Ferramenta de Prospecção Consultiva com IA
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-xs text-blue-100">Powered by</p>
+                <p className="font-semibold">Meta IT × GPT-4</p>
+              </div>
+            </div>
+          </div>
+        </header>
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+        {/* Main Content */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left Sidebar - Templates */}
+          <TemplateSidebar />
+
+          {/* Center - Canvas */}
+          <div className="flex-1">
+            <ProspectCanvas />
+          </div>
+
+          {/* Right Sidebar - AI Suggestions */}
+          <AIPanel />
+        </div>
+      </div>
+    </ReactFlowProvider>
+  );
+}
 
 export default App;
