@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   ReactFlow,
   Background,
@@ -7,64 +7,60 @@ import {
   BackgroundVariant,
   useReactFlow,
 } from '@xyflow/react';
-import { useCanvasStore } from '../../store/canvasStore';
-import MindMapNode from '../Nodes/MindMapNode';
+import { useLeadStore } from '@/store/leadStore';
+import AnalysisNode from '../Nodes/AnalysisNode';
+import { leadAnalysisTemplate, getNodePositions, getNodeEdges } from '@/templates/leadAnalysisTemplate';
 
 const nodeTypes = {
-  mindMapNode: MindMapNode,
+  analysisNode: AnalysisNode,
 };
 
 const ProspectCanvas = () => {
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect } = useCanvasStore();
   const { fitView } = useReactFlow();
+  const { analysis, selectedSectionId, setSelectedSectionId } = useLeadStore();
+
+  const nodes = useMemo(() => {
+    return getNodePositions(leadAnalysisTemplate).map((node) => ({
+      ...node,
+      selected: node.id === selectedSectionId,
+    }));
+  }, [selectedSectionId]);
+
+  const edges = useMemo(() => getNodeEdges(), []);
 
   useEffect(() => {
     if (nodes.length > 0) {
       setTimeout(() => {
         fitView({ padding: 0.2, duration: 800 });
-      }, 50);
+      }, 100);
     }
   }, [nodes.length, fitView]);
 
   const onNodeClick = useCallback((_event: React.MouseEvent, node: any) => {
-    useCanvasStore.getState().setSelectedNodeId(node.id);
-  }, []);
+    setSelectedSectionId(node.id);
+  }, [setSelectedSectionId]);
 
   return (
-    <div className="w-full h-full bg-gray-50">
+    <div className="w-full h-full bg-muted/30">
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
         onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
         fitView
-        minZoom={0.2}
-        maxZoom={2}
+        minZoom={0.3}
+        maxZoom={1.5}
         defaultEdgeOptions={{
           type: 'smoothstep',
           animated: true,
-          style: { stroke: '#94a3b8', strokeWidth: 2 },
+          style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
         }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#cbd5e1" />
-        <Controls />
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="hsl(var(--muted-foreground) / 0.2)" />
+        <Controls className="!bg-card !border-border" />
         <MiniMap
-          nodeColor={(node: any) => {
-            const colors: Record<string, string> = {
-              opening: '#3B82F6',
-              hook: '#8B5CF6',
-              discovery: '#10B981',
-              qualification: '#F59E0B',
-              presentation: '#EC4899',
-              cta: '#EF4444',
-              objections: '#6B7280',
-            };
-            return colors[node.data?.type] || '#6B7280';
-          }}
-          className="!bg-white !border-2 !border-gray-300"
+          nodeColor={() => 'hsl(var(--primary))'}
+          className="!bg-card !border-border"
         />
       </ReactFlow>
     </div>
