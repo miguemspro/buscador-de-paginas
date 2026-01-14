@@ -2,15 +2,16 @@ import { ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ImageUpload from './components/Sidebar/ImageUpload';
 import LeadForm from './components/Sidebar/LeadForm';
 import ProspectCanvas from './components/Canvas/ProspectCanvas';
 import AnalysisPanel from './components/Sidebar/AnalysisPanel';
 import { useLeadStore } from './store/leadStore';
-import { FileText, LayoutGrid, MessageSquare } from 'lucide-react';
+import { Upload, FileText, LayoutGrid, MessageSquare } from 'lucide-react';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<string>('form');
-  const { analysis } = useLeadStore();
+  const [activeTab, setActiveTab] = useState<string>('upload');
+  const { analysis, leadInfo, error } = useLeadStore();
 
   const handleAnalysisGenerated = () => {
     setActiveTab('analysis');
@@ -25,11 +26,17 @@ function App() {
             <div>
               <h1 className="text-2xl font-bold">SDR ProspectFlow</h1>
               <p className="text-sm text-primary-foreground/80">
-                Análise Inteligente de Leads para Abordagem Consultiva
+                Análise Inteligente de Leads com IA
               </p>
             </div>
             <div className="flex items-center gap-4">
-              <div className="text-right">
+              {leadInfo && (
+                <div className="text-right">
+                  <p className="text-xs text-primary-foreground/70">Lead atual</p>
+                  <p className="font-semibold">{leadInfo.name} - {leadInfo.company}</p>
+                </div>
+              )}
+              <div className="text-right border-l border-white/20 pl-4">
                 <p className="text-xs text-primary-foreground/70">Powered by</p>
                 <p className="font-semibold">Meta IT × IA</p>
               </div>
@@ -39,23 +46,31 @@ function App() {
 
         {/* Main Content */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Left Sidebar - Forms & Analysis */}
+          {/* Left Sidebar */}
           <div className="w-[400px] border-r bg-card flex flex-col">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
-              <TabsList className="grid w-full grid-cols-3 p-1 m-2">
-                <TabsTrigger value="form" className="gap-1">
-                  <FileText className="h-4 w-4" />
-                  Lead
+              <TabsList className="grid w-full grid-cols-4 p-1 m-2">
+                <TabsTrigger value="upload" className="gap-1 text-xs">
+                  <Upload className="h-3 w-3" />
+                  Print
                 </TabsTrigger>
-                <TabsTrigger value="analysis" disabled={!analysis} className="gap-1">
-                  <LayoutGrid className="h-4 w-4" />
+                <TabsTrigger value="form" className="gap-1 text-xs">
+                  <FileText className="h-3 w-3" />
+                  Manual
+                </TabsTrigger>
+                <TabsTrigger value="analysis" disabled={!analysis} className="gap-1 text-xs">
+                  <LayoutGrid className="h-3 w-3" />
                   Análise
                 </TabsTrigger>
-                <TabsTrigger value="script" disabled={!analysis} className="gap-1">
-                  <MessageSquare className="h-4 w-4" />
+                <TabsTrigger value="script" disabled={!analysis} className="gap-1 text-xs">
+                  <MessageSquare className="h-3 w-3" />
                   Script
                 </TabsTrigger>
               </TabsList>
+              
+              <TabsContent value="upload" className="flex-1 overflow-hidden m-0">
+                <ImageUpload onAnalysisGenerated={handleAnalysisGenerated} />
+              </TabsContent>
               
               <TabsContent value="form" className="flex-1 overflow-hidden m-0">
                 <LeadForm onAnalysisGenerated={handleAnalysisGenerated} />
@@ -69,6 +84,13 @@ function App() {
                 <AnalysisPanel view="script" />
               </TabsContent>
             </Tabs>
+
+            {/* Error Display */}
+            {error && (
+              <div className="p-4 bg-destructive/10 text-destructive text-sm border-t">
+                {error}
+              </div>
+            )}
           </div>
 
           {/* Center - Canvas */}
