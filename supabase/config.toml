@@ -2,3 +2,6 @@ project_id = "oafulfbetlfnrwzsfuzs"
 
 [functions.generate-lead-analysis]
 verify_jwt = false
+
+[functions.extract-salesforce-data]
+verify_jwt = false
