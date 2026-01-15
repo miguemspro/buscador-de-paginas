@@ -116,9 +116,20 @@ ESTRUTURA DAS 6 SEÇÕES:
    - Contexto público recente
 
 2. EVIDÊNCIAS E NOTÍCIAS (6-10 itens):
-   - Notícias sobre a empresa relacionadas a tecnologia, SAP, integração, automação, compliance
-   - Cada item com: título, o que indica, link da fonte, nome da fonte
-   - Use fontes plausíveis: LinkedIn da empresa, SAP News, portais do setor, Valor Econômico, etc.
+   IMPORTANTE: As evidências devem ser ESPECÍFICAS sobre a empresa do lead ou sobre o próprio lead!
+   
+   EXEMPLOS CORRETOS (específicos):
+   - "[Nome da Empresa] reforça investimentos em Transformação Digital e Indústria 4.0" (LinkedIn da Empresa)
+   - "[Nome da Empresa] expande portfólio e projeta crescimento de dois dígitos" (Valor Econômico)
+   - "[Nome do Lead] discute o papel da Inovação Digital no setor" (LinkedIn Pulse)
+   - "[Nome da Empresa] utiliza inteligência de dados para otimizar operações" (Portal do Setor)
+   
+   EXEMPLOS ERRADOS (genéricos - NÃO USE):
+   - "O fim do suporte ao SAP ECC: O que as empresas planejam?" (muito genérico)
+   - "Setor de agro investe em tecnologia" (não menciona a empresa específica)
+   
+   Cada item com: título ESPECÍFICO sobre a empresa/lead, o que indica, link plausível, nome da fonte
+   Fontes: LinkedIn da empresa, LinkedIn do lead, Valor Econômico, portais do setor, SAP News mencionando a empresa
 
 3. DORES PROVÁVEIS (10 itens):
    - Baseadas no segmento e contexto do lead
