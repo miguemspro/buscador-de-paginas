@@ -41,6 +41,7 @@ export interface Evidence {
   indication: string;          // O que indica (interpretação)
   link: string;                // URL da fonte
   source: string;              // Nome da fonte (LinkedIn, site, etc)
+  date?: string;               // Data aproximada (ex: "Jan 2026")
 }
 
 // ============================================

@@ -15,3 +15,6 @@ verify_jwt = false
 
 [functions.generate-playbook]
 verify_jwt = false
+
+[functions.research-company]
+verify_jwt = false
