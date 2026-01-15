@@ -115,21 +115,24 @@ ESTRUTURA DAS 6 SEÇÕES:
    - Melhor ângulo de abordagem
    - Contexto público recente
 
-2. EVIDÊNCIAS E NOTÍCIAS (6-10 itens):
-   IMPORTANTE: As evidências devem ser ESPECÍFICAS sobre a empresa do lead ou sobre o próprio lead!
+2. EVIDÊNCIAS E NOTÍCIAS (0-6 itens):
+   REGRA CRÍTICA: NÃO INVENTE EVIDÊNCIAS! 
    
-   EXEMPLOS CORRETOS (específicos):
-   - "[Nome da Empresa] reforça investimentos em Transformação Digital e Indústria 4.0" (LinkedIn da Empresa)
-   - "[Nome da Empresa] expande portfólio e projeta crescimento de dois dígitos" (Valor Econômico)
-   - "[Nome do Lead] discute o papel da Inovação Digital no setor" (LinkedIn Pulse)
-   - "[Nome da Empresa] utiliza inteligência de dados para otimizar operações" (Portal do Setor)
+   Se você não tem informação REAL e VERIFICÁVEL sobre a empresa ou lead, retorne um array VAZIO [].
    
-   EXEMPLOS ERRADOS (genéricos - NÃO USE):
-   - "O fim do suporte ao SAP ECC: O que as empresas planejam?" (muito genérico)
-   - "Setor de agro investe em tecnologia" (não menciona a empresa específica)
+   Em vez de links (que não funcionam), forneça SUGESTÕES DE PESQUISA para o SDR:
+   - O campo "link" deve conter instruções de onde pesquisar, não URLs falsas
+   - Exemplo de link: "Pesquisar no LinkedIn: [Nome da Empresa] + transformação digital"
+   - Exemplo de link: "Buscar no Google: '[Nome da Empresa]' + SAP + 2024"
    
-   Cada item com: título ESPECÍFICO sobre a empresa/lead, o que indica, link plausível, nome da fonte
-   Fontes: LinkedIn da empresa, LinkedIn do lead, Valor Econômico, portais do setor, SAP News mencionando a empresa
+   Cada item deve ser uma HIPÓTESE PLAUSÍVEL baseada no segmento:
+   - Título: hipótese de notícia provável para o segmento
+   - Indicação: o que isso indicaria se confirmado
+   - Link: sugestão de onde o SDR pode pesquisar para validar
+   - Fonte: tipo de fonte sugerida (LinkedIn, Google News, site da empresa, etc.)
+   
+   Se não houver informações específicas conhecidas sobre a empresa, retorne array vazio.
+   É MELHOR não ter evidências do que ter evidências falsas!
 
 3. DORES PROVÁVEIS (10 itens):
    - Baseadas no segmento e contexto do lead
@@ -237,19 +240,19 @@ Gere o playbook completo com as 6 seções especificadas.`;
                 },
                 evidences: {
                   type: 'array',
-                  description: 'Evidências e notícias com links (6-10 itens)',
+                  description: 'Sugestões de pesquisa sobre a empresa (0-6 itens). Se não houver informações reais conhecidas, retorne array vazio []',
                   items: {
                     type: 'object',
                     properties: {
-                      title: { type: 'string', description: 'Título da notícia/evidência' },
-                      indication: { type: 'string', description: 'O que isso indica para a abordagem' },
-                      link: { type: 'string', description: 'URL da fonte (plausível)' },
-                      source: { type: 'string', description: 'Nome da fonte (LinkedIn, portal, etc)' }
+                      title: { type: 'string', description: 'Hipótese de evidência baseada no segmento da empresa' },
+                      indication: { type: 'string', description: 'O que isso indicaria se confirmado pelo SDR' },
+                      link: { type: 'string', description: 'Sugestão de pesquisa (ex: Pesquisar no LinkedIn: empresa + tema)' },
+                      source: { type: 'string', description: 'Tipo de fonte sugerida (LinkedIn, Google News, site da empresa)' }
                     },
                     required: ['title', 'indication', 'link', 'source']
                   },
-                  minItems: 6,
-                  maxItems: 10
+                  minItems: 0,
+                  maxItems: 6
                 },
                 probablePains: {
                   type: 'array',
