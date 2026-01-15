@@ -7,27 +7,6 @@ export type PlaybookStep =
   | 'generating'  // Passo 2.5: Gerando análise
   | 'playbook';   // Passo 3: Playbook completo
 
-export interface PlaybookCard {
-  id: string;
-  step: number;
-  title: string;
-  subtitle?: string;
-  icon: string;
-  type: 'opener' | 'context' | 'hook' | 'questions' | 'objections' | 'close';
-  content: string | string[];
-  tips?: string[];
-  copyable?: boolean;
-}
-
-export interface CallScript {
-  opener: PlaybookCard;
-  context: PlaybookCard;
-  hook: PlaybookCard;
-  discoveryQuestions: PlaybookCard;
-  objectionHandlers: PlaybookCard;
-  closeAttempt: PlaybookCard;
-}
-
 export interface ExtractedLeadData {
   name?: string;
   role?: string;
@@ -43,28 +22,56 @@ export interface ExtractedLeadData {
   leadSource?: string;
 }
 
+// Novo formato de insights estruturados
+export interface KeyInsight {
+  insight: string;
+  source: string;
+  relevance: string;
+}
+
+// Dores com impacto e pergunta de validação
+export interface ProbablePain {
+  pain: string;
+  impact: string;
+  question: string;
+}
+
+// Soluções com contexto de como mencionar
+export interface MetaSolution {
+  solution: string;
+  description: string;
+  alignedPain: string;
+  howToMention: string;
+}
+
+// Cases para citar
+export interface CaseToCite {
+  company: string;
+  result: string;
+  howToIntroduce: string;
+}
+
+// Objeção e resposta
+export interface ObjectionHandler {
+  objection: string;
+  response: string;
+}
+
 export interface GeneratedPlaybook {
   // Contexto
   leadSummary: string;
-  keyInsights: string[];
+  keyInsights: KeyInsight[];
   
-  // Script em cards
-  callScript: {
-    opener: string;
-    contextBridge: string;
-    valueHook: string;
-    discoveryQuestions: string[];
-    objectionHandlers: {
-      objection: string;
-      response: string;
-    }[];
-    closeAttempt: string;
-  };
+  // Script LINEAR (texto corrido)
+  linearScript: string;
+  
+  // Objeções
+  objectionHandlers: ObjectionHandler[];
   
   // Dores e soluções para referência
-  probablePains: string[];
-  metaSolutions: {
-    solution: string;
-    alignedPain: string;
-  }[];
+  probablePains: ProbablePain[];
+  metaSolutions: MetaSolution[];
+  
+  // Cases para citar
+  casesToCite: CaseToCite[];
 }

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { usePlaybookStore } from '@/store/playbookStore';
-import PlaybookCard from './PlaybookCard';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,97 +11,70 @@ import {
   AlertTriangle,
   Lightbulb,
   Copy,
-  Check
+  Check,
+  MessageSquare,
+  Shield,
+  Target,
+  Sparkles,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export default function PlaybookView() {
   const { playbook, extractedData, reset } = usePlaybookStore();
-  const [activeStep, setActiveStep] = useState(1);
-  const [copiedAll, setCopiedAll] = useState(false);
+  const [copiedScript, setCopiedScript] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    insights: true,
+    script: true,
+    cases: true,
+    pains: false,
+    solutions: false,
+    objections: false,
+  });
 
   if (!playbook) return null;
 
-  const cards = [
-    {
-      step: 1,
-      title: 'Abertura',
-      subtitle: 'Primeiros 20 segundos',
-      icon: '👋',
-      content: playbook.callScript.opener,
-      tips: [
-        'Fale devagar e com confiança',
-        'Pause após pedir os 20 segundos',
-        'Se disser não, agradeça e desligue'
-      ]
-    },
-    {
-      step: 2,
-      title: 'Ponte de Contexto',
-      subtitle: 'Mostre que você pesquisou',
-      icon: '🔍',
-      content: playbook.callScript.contextBridge,
-      tips: [
-        'Use tom consultivo, não de vendas',
-        'Cite fatos específicos que você viu'
-      ]
-    },
-    {
-      step: 3,
-      title: 'Gancho de Valor',
-      subtitle: 'Por que você está ligando',
-      icon: '🎯',
-      content: playbook.callScript.valueHook,
-      tips: [
-        'Conecte o gancho às dores prováveis',
-        'Deixe claro que quer entender, não vender'
-      ]
-    },
-    {
-      step: 4,
-      title: 'Perguntas de Discovery',
-      subtitle: 'Descubra a dor real',
-      icon: '❓',
-      content: playbook.callScript.discoveryQuestions,
-      tips: [
-        'Faça uma pergunta por vez',
-        'Ouça mais do que fala',
-        'Anote as respostas'
-      ]
-    },
-    {
-      step: 5,
-      title: 'Objeções Comuns',
-      subtitle: 'Respostas prontas',
-      icon: '🛡️',
-      content: playbook.callScript.objectionHandlers.map(
-        h => `"${h.objection}" → ${h.response}`
-      ),
-      tips: [
-        'Não discuta, acolha a objeção',
-        'Use "Faz sentido" antes de responder'
-      ]
-    },
-    {
-      step: 6,
-      title: 'Fechamento',
-      subtitle: 'Próximo passo',
-      icon: '📅',
-      content: playbook.callScript.closeAttempt,
-      tips: [
-        'Ofereça um próximo passo concreto',
-        'Confirme data/hora antes de desligar'
-      ]
-    },
-  ];
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const handleCopyScript = () => {
+    navigator.clipboard.writeText(playbook.linearScript);
+    setCopiedScript(true);
+    toast.success('Script copiado!');
+    setTimeout(() => setCopiedScript(false), 2000);
+  };
 
   const handleCopyAll = () => {
-    const fullScript = `ABERTURA:\n${playbook.callScript.opener}\n\nCONTEXTO:\n${playbook.callScript.contextBridge}\n\nGANCHO:\n${playbook.callScript.valueHook}\n\nPERGUNTAS:\n${playbook.callScript.discoveryQuestions.join('\n')}\n\nOBJEÇÕES:\n${playbook.callScript.objectionHandlers.map(h => `"${h.objection}" → ${h.response}`).join('\n')}\n\nFECHAMENTO:\n${playbook.callScript.closeAttempt}`;
-    navigator.clipboard.writeText(fullScript);
-    setCopiedAll(true);
-    toast.success('Script completo copiado!');
-    setTimeout(() => setCopiedAll(false), 2000);
+    const fullContent = `
+PLAYBOOK DE LIGAÇÃO - ${extractedData?.name || 'Lead'}
+${extractedData?.company || ''} | ${extractedData?.role || ''}
+================================================
+
+📊 INSIGHTS CHAVE:
+${playbook.keyInsights.map((i, idx) => `${idx + 1}. ${i.insight}\n   Fonte: ${i.source}\n   Relevância: ${i.relevance}`).join('\n\n')}
+
+📞 SCRIPT DA LIGAÇÃO:
+${playbook.linearScript}
+
+🏆 CASES PARA CITAR:
+${playbook.casesToCite.map(c => `• ${c.company}: ${c.result}\n  Como introduzir: "${c.howToIntroduce}"`).join('\n\n')}
+
+🎯 DORES PROVÁVEIS:
+${playbook.probablePains.map(p => `• ${p.pain}\n  Impacto: ${p.impact}\n  Pergunta: "${p.question}"`).join('\n\n')}
+
+💡 SOLUÇÕES META IT:
+${playbook.metaSolutions.map(s => `• ${s.solution}: ${s.description}\n  Dor que resolve: ${s.alignedPain}\n  Como mencionar: "${s.howToMention}"`).join('\n\n')}
+
+🛡️ OBJEÇÕES E RESPOSTAS:
+${playbook.objectionHandlers.map(o => `• "${o.objection}"\n  → ${o.response}`).join('\n\n')}
+    `.trim();
+    
+    navigator.clipboard.writeText(fullContent);
+    toast.success('Playbook completo copiado!');
   };
 
   return (
@@ -118,8 +90,8 @@ export default function PlaybookView() {
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleCopyAll} className="gap-2">
-              {copiedAll ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copiedAll ? 'Copiado!' : 'Copiar Tudo'}
+              <Copy className="h-4 w-4" />
+              Copiar Tudo
             </Button>
             <Button variant="ghost" size="sm" onClick={reset} className="gap-2">
               <RotateCcw className="h-4 w-4" />
@@ -133,7 +105,7 @@ export default function PlaybookView() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Sidebar - Lead Context */}
           <div className="lg:col-span-1 space-y-4">
-            {/* Lead Summary Card */}
+            {/* Lead Info Card */}
             <Card className="p-6 sticky top-24">
               <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
                 <User className="h-5 w-5 text-primary" />
@@ -157,92 +129,230 @@ export default function PlaybookView() {
                     <span>{extractedData.industry}</span>
                   </div>
                 )}
+                
+                {playbook.leadSummary && (
+                  <p className="text-sm text-muted-foreground italic border-l-2 border-primary/30 pl-3 mt-4">
+                    {playbook.leadSummary}
+                  </p>
+                )}
               </div>
 
+              {/* Cases para Citar */}
               <div className="mt-6 pt-4 border-t">
-                <h4 className="text-sm font-semibold text-muted-foreground mb-3">
-                  Insights Chave
-                </h4>
-                <div className="space-y-2">
-                  {playbook.keyInsights.slice(0, 4).map((insight, i) => (
-                    <div key={i} className="flex items-start gap-2 text-sm">
-                      <Lightbulb className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                      <span>{insight}</span>
-                    </div>
-                  ))}
-                </div>
+                <button 
+                  onClick={() => toggleSection('cases')}
+                  className="flex items-center justify-between w-full text-left"
+                >
+                  <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <Target className="h-4 w-4 text-green-500" />
+                    Cases para Citar
+                  </h4>
+                  {expandedSections.cases ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+                {expandedSections.cases && (
+                  <div className="space-y-3 mt-3">
+                    {playbook.casesToCite.map((caseItem, i) => (
+                      <div key={i} className="bg-green-50 dark:bg-green-950/30 rounded-lg p-3 text-sm">
+                        <p className="font-semibold text-green-700 dark:text-green-400">{caseItem.company}</p>
+                        <p className="text-green-600 dark:text-green-300 mt-1">{caseItem.result}</p>
+                        <p className="text-xs text-muted-foreground mt-2 italic">
+                          💬 "{caseItem.howToIntroduce}"
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Quick Reference - Pains */}
+              {/* Dores Prováveis */}
               <div className="mt-6 pt-4 border-t">
-                <h4 className="text-sm font-semibold text-muted-foreground mb-3">
-                  Dores Prováveis
-                </h4>
-                <div className="space-y-2">
-                  {playbook.probablePains.slice(0, 5).map((pain, i) => (
-                    <div key={i} className="flex items-start gap-2 text-sm">
-                      <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
-                      <span>{pain}</span>
-                    </div>
-                  ))}
-                </div>
+                <button 
+                  onClick={() => toggleSection('pains')}
+                  className="flex items-center justify-between w-full text-left"
+                >
+                  <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                    Dores Prováveis
+                  </h4>
+                  {expandedSections.pains ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+                {expandedSections.pains && (
+                  <div className="space-y-3 mt-3">
+                    {playbook.probablePains.map((painItem, i) => (
+                      <div key={i} className="text-sm">
+                        <p className="font-medium">{painItem.pain}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Impacto: {painItem.impact}
+                        </p>
+                        <p className="text-xs text-primary mt-1 italic">
+                          Pergunta: "{painItem.question}"
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Soluções Meta IT */}
+              <div className="mt-6 pt-4 border-t">
+                <button 
+                  onClick={() => toggleSection('solutions')}
+                  className="flex items-center justify-between w-full text-left"
+                >
+                  <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    Soluções Meta IT
+                  </h4>
+                  {expandedSections.solutions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+                {expandedSections.solutions && (
+                  <div className="space-y-3 mt-3">
+                    {playbook.metaSolutions.map((sol, i) => (
+                      <div key={i} className="bg-primary/5 rounded-lg p-3 text-sm">
+                        <p className="font-semibold text-primary">{sol.solution}</p>
+                        <p className="text-muted-foreground text-xs mt-1">{sol.description}</p>
+                        <p className="text-xs mt-2">
+                          <span className="text-destructive">Resolve:</span> {sol.alignedPain}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1 italic">
+                          💬 "{sol.howToMention}"
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </Card>
           </div>
 
-          {/* Main Content - Cards */}
+          {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Step Navigation */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
-              {cards.map((card) => (
-                <button
-                  key={card.step}
-                  onClick={() => setActiveStep(card.step)}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all",
-                    activeStep === card.step
-                      ? "bg-primary text-primary-foreground shadow-lg"
-                      : "bg-muted hover:bg-muted/80"
-                  )}
-                >
-                  <span>{card.icon}</span>
-                  <span className="text-sm font-medium">{card.title}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Active Card */}
-            <div className="relative">
-              {cards.map((card) => (
-                <div
-                  key={card.step}
-                  className={cn(
-                    "transition-all duration-300",
-                    activeStep === card.step 
-                      ? "opacity-100 visible" 
-                      : "opacity-0 invisible absolute inset-0"
-                  )}
-                >
-                  <PlaybookCard
-                    step={card.step}
-                    totalSteps={cards.length}
-                    title={card.title}
-                    subtitle={card.subtitle}
-                    icon={card.icon}
-                    content={card.content}
-                    tips={card.tips}
-                    isActive={activeStep === card.step}
-                    onNext={() => setActiveStep(Math.min(card.step + 1, cards.length))}
-                    onPrevious={() => setActiveStep(Math.max(card.step - 1, 1))}
-                  />
+            
+            {/* Insights Chave */}
+            <Card className="p-6">
+              <button 
+                onClick={() => toggleSection('insights')}
+                className="flex items-center justify-between w-full text-left mb-4"
+              >
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  <Lightbulb className="h-5 w-5 text-amber-500" />
+                  Insights Chave do Lead
+                </h3>
+                {expandedSections.insights ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+              </button>
+              
+              {expandedSections.insights && (
+                <div className="grid gap-3">
+                  {playbook.keyInsights.map((insightItem, i) => (
+                    <div 
+                      key={i} 
+                      className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-4 border border-amber-100 dark:border-amber-900"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="text-amber-600 font-bold">{i + 1}</span>
+                        <div className="flex-1">
+                          <p className="font-medium text-amber-900 dark:text-amber-100">
+                            {insightItem.insight}
+                          </p>
+                          <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <ExternalLink className="h-3 w-3" />
+                              {insightItem.source}
+                            </span>
+                          </div>
+                          <p className="text-sm text-amber-700 dark:text-amber-300 mt-2">
+                            ➜ {insightItem.relevance}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </Card>
 
-            {/* Keyboard hint */}
-            <p className="text-center text-sm text-muted-foreground">
-              Use os botões ou clique nas etapas acima para navegar
-            </p>
+            {/* Script Linear */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <button 
+                  onClick={() => toggleSection('script')}
+                  className="flex items-center gap-2 text-left"
+                >
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5 text-primary" />
+                    Script da Ligação
+                  </h3>
+                </button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleCopyScript}
+                  className="gap-2"
+                >
+                  {copiedScript ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copiedScript ? 'Copiado!' : 'Copiar Script'}
+                </Button>
+              </div>
+              
+              {expandedSections.script && (
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <div className="bg-muted/50 rounded-lg p-6 text-base leading-relaxed whitespace-pre-wrap font-normal">
+                    {playbook.linearScript.split('\n').map((paragraph, i) => {
+                      // Destacar instruções entre colchetes
+                      const formattedParagraph = paragraph.replace(
+                        /\[(.*?)\]/g, 
+                        '<span class="text-primary font-semibold">[$1]</span>'
+                      );
+                      
+                      return paragraph.trim() ? (
+                        <p 
+                          key={i} 
+                          className="mb-4"
+                          dangerouslySetInnerHTML={{ __html: formattedParagraph }}
+                        />
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* Objeções */}
+            <Card className="p-6">
+              <button 
+                onClick={() => toggleSection('objections')}
+                className="flex items-center justify-between w-full text-left mb-4"
+              >
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-blue-500" />
+                  Objeções e Respostas
+                </h3>
+                {expandedSections.objections ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+              </button>
+              
+              {expandedSections.objections && (
+                <div className="space-y-4">
+                  {playbook.objectionHandlers.map((obj, i) => (
+                    <div 
+                      key={i} 
+                      className="border rounded-lg overflow-hidden"
+                    >
+                      <div className="bg-red-50 dark:bg-red-950/30 p-3 border-b">
+                        <p className="font-medium text-red-700 dark:text-red-300">
+                          🚫 "{obj.objection}"
+                        </p>
+                      </div>
+                      <div className="bg-green-50 dark:bg-green-950/30 p-3">
+                        <p className="text-green-700 dark:text-green-300">
+                          ✅ {obj.response}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
           </div>
         </div>
       </div>
