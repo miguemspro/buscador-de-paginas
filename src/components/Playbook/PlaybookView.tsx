@@ -4,10 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  RotateCcw, 
-  User, 
-  Building2, 
+import {
+  RotateCcw,
+  User,
+  Building2,
   Briefcase,
   AlertTriangle,
   Lightbulb,
@@ -24,7 +24,9 @@ import {
   Zap,
   TrendingUp,
   Users,
-  Settings
+  Settings,
+  Server,
+  Database
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -45,6 +47,10 @@ export default function PlaybookView() {
   });
 
   if (!playbook) return null;
+
+  // Separar evidências por categoria
+  const sapEvidences = playbook.evidences?.filter(e => e.category === 'SAP') || [];
+  const techEvidences = playbook.evidences?.filter(e => e.category === 'Tecnologia') || [];
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -274,9 +280,9 @@ ${playbook.approachScript?.fullText || ''}
               )}
             </Card>
 
-            {/* 2. EVIDÊNCIAS E PESQUISA */}
+            {/* 2. EVIDÊNCIAS E NOTÍCIAS */}
             <Card className="p-6" id="evidences">
-              <button 
+              <button
                 onClick={() => toggleSection('evidences')}
                 className="flex items-center justify-between w-full text-left mb-4"
               >
@@ -289,35 +295,32 @@ ${playbook.approachScript?.fullText || ''}
                 </h2>
                 {expandedSections.evidences ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
               </button>
-              
+
               {expandedSections.evidences && (
-                <div className="space-y-4">
-                  {/* Evidências Reais Encontradas */}
-                  {playbook.evidences && playbook.evidences.length > 0 ? (
-                    <div className="space-y-3">
-                      <p className="text-sm text-muted-foreground flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-green-500" />
-                        Informações encontradas via pesquisa automatizada (OpenAI + Web Search)
-                      </p>
-                      <div className="grid gap-3">
-                        {playbook.evidences.map((evidence, i) => (
+                <div className="space-y-6">
+                  {/* Seção SAP */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Database className="h-5 w-5 text-orange-500" />
+                      <h3 className="font-semibold text-base">Ambiente SAP</h3>
+                      <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300">
+                        {sapEvidences.length} evidências
+                      </Badge>
+                    </div>
+                    {sapEvidences.length > 0 ? (
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {sapEvidences.map((evidence, i) => (
                           <a
                             key={i}
                             href={evidence.link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="block border rounded-lg p-4 hover:bg-muted/50 transition-colors group"
+                            className="block border rounded-lg p-4 hover:bg-orange-50/50 dark:hover:bg-orange-950/20 transition-colors group border-orange-200 dark:border-orange-800"
                           >
-                            <div className="flex items-center gap-2 mb-2">
-                              <Badge 
-                                variant="outline" 
-                                className={cn(
-                                  "text-xs",
-                                  evidence.source?.toLowerCase().includes('linkedin') && "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300",
-                                  evidence.source?.toLowerCase().includes('google') && "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300",
-                                  !evidence.source?.toLowerCase().includes('linkedin') && !evidence.source?.toLowerCase().includes('google') && "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950 dark:text-gray-300"
-                                )}
-                              >
+                            <h4 className="font-medium text-sm mb-2 line-clamp-2">{evidence.title}</h4>
+                            <p className="text-xs text-muted-foreground mb-3 line-clamp-2">→ {evidence.indication}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-950 dark:text-orange-400">
                                 {evidence.source || 'Web'}
                               </Badge>
                               {evidence.date && (
@@ -325,77 +328,61 @@ ${playbook.approachScript?.fullText || ''}
                               )}
                               <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                             </div>
-                            <h4 className="font-medium text-sm mb-1">{evidence.title}</h4>
-                            <p className="text-xs text-muted-foreground">{evidence.indication}</p>
                           </a>
                         ))}
                       </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">Nenhuma evidência SAP encontrada para esta empresa.</p>
+                    )}
+                  </div>
+
+                  {/* Separador */}
+                  <div className="border-t" />
+
+                  {/* Seção Tecnologia */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Server className="h-5 w-5 text-purple-500" />
+                      <h3 className="font-semibold text-base">Ambiente de Tecnologia</h3>
+                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300">
+                        {techEvidences.length} evidências
+                      </Badge>
                     </div>
-                  ) : (
-                    <div className="bg-muted/50 rounded-lg p-4 border border-dashed">
-                      <p className="text-sm text-muted-foreground mb-4 flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-amber-500" />
-                        Nenhuma evidência foi encontrada automaticamente. Pesquise manualmente:
-                      </p>
-                      
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <a
-                          href={`https://www.linkedin.com/search/results/content/?keywords="${encodeURIComponent(extractedData?.company || '')}"`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 px-4 py-3 bg-background border rounded-lg hover:bg-muted transition-colors"
-                        >
-                          <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white text-xs font-bold">in</div>
-                          <div>
-                            <p className="text-sm font-medium">LinkedIn da Empresa</p>
-                            <p className="text-xs text-muted-foreground">Posts e atualizações recentes</p>
-                          </div>
-                          <ExternalLink className="h-4 w-4 ml-auto text-muted-foreground" />
-                        </a>
-                        
-                        <a
-                          href={`https://www.google.com/search?q="${encodeURIComponent(extractedData?.company || '')}" SAP 2024&tbm=nws`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 px-4 py-3 bg-background border rounded-lg hover:bg-muted transition-colors"
-                        >
-                          <div className="w-8 h-8 bg-red-500 rounded flex items-center justify-center text-white text-xs font-bold">G</div>
-                          <div>
-                            <p className="text-sm font-medium">Notícias no Google</p>
-                            <p className="text-xs text-muted-foreground">Notícias recentes da empresa</p>
-                          </div>
-                          <ExternalLink className="h-4 w-4 ml-auto text-muted-foreground" />
-                        </a>
-                        
-                        <a
-                          href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(extractedData?.name || '')} ${encodeURIComponent(extractedData?.company || '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 px-4 py-3 bg-background border rounded-lg hover:bg-muted transition-colors"
-                        >
-                          <User className="w-8 h-8 p-1.5 bg-blue-600 rounded text-white" />
-                          <div>
-                            <p className="text-sm font-medium">Perfil do Lead</p>
-                            <p className="text-xs text-muted-foreground">LinkedIn de {extractedData?.name?.split(' ')[0]}</p>
-                          </div>
-                          <ExternalLink className="h-4 w-4 ml-auto text-muted-foreground" />
-                        </a>
-                        
-                        <a
-                          href={`https://www.google.com/search?q="${encodeURIComponent(extractedData?.company || '')}" transformação digital tecnologia`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 px-4 py-3 bg-background border rounded-lg hover:bg-muted transition-colors"
-                        >
-                          <TrendingUp className="w-8 h-8 p-1.5 bg-green-500 rounded text-white" />
-                          <div>
-                            <p className="text-sm font-medium">Iniciativas de TI</p>
-                            <p className="text-xs text-muted-foreground">Projetos de transformação digital</p>
-                          </div>
-                          <ExternalLink className="h-4 w-4 ml-auto text-muted-foreground" />
-                        </a>
+                    {techEvidences.length > 0 ? (
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {techEvidences.map((evidence, i) => (
+                          <a
+                            key={i}
+                            href={evidence.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block border rounded-lg p-4 hover:bg-purple-50/50 dark:hover:bg-purple-950/20 transition-colors group border-purple-200 dark:border-purple-800"
+                          >
+                            <h4 className="font-medium text-sm mb-2 line-clamp-2">{evidence.title}</h4>
+                            <p className="text-xs text-muted-foreground mb-3 line-clamp-2">→ {evidence.indication}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950 dark:text-purple-400">
+                                {evidence.source || 'Web'}
+                              </Badge>
+                              {evidence.date && (
+                                <span className="text-xs text-muted-foreground">{evidence.date}</span>
+                              )}
+                              <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </a>
+                        ))}
                       </div>
-                    </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">Nenhuma evidência de tecnologia encontrada para esta empresa.</p>
+                    )}
+                  </div>
+
+                  {/* Informação sobre a pesquisa */}
+                  {(sapEvidences.length > 0 || techEvidences.length > 0) && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-2 pt-2 border-t">
+                      <Sparkles className="h-3 w-3 text-green-500" />
+                      Informações pesquisadas automaticamente via OpenAI Web Search
+                    </p>
                   )}
                 </div>
               )}

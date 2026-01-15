@@ -34,7 +34,7 @@ export interface ExecutiveSummary {
 }
 
 // ============================================
-// 2) EVIDÊNCIAS E NOTÍCIAS - 6 a 10 itens COM LINKS
+// 2) EVIDÊNCIAS E NOTÍCIAS - 6 itens COM LINKS (3 SAP + 3 Tecnologia)
 // ============================================
 export interface Evidence {
   title: string;               // Título da notícia/evidência
@@ -42,6 +42,7 @@ export interface Evidence {
   link: string;                // URL da fonte
   source: string;              // Nome da fonte (LinkedIn, site, etc)
   date?: string;               // Data aproximada (ex: "Jan 2026")
+  category?: 'SAP' | 'Tecnologia'; // Categoria da evidência
 }
 
 // ============================================
