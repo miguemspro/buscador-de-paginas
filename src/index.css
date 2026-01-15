@@ -2,90 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
-/* SDR ProspectFlow Design System - Meta IT Branding */
+/* SDR ProspectFlow - Modern Clean Design */
 
 @layer base {
   :root {
-    --background: 220 20% 97%;
-    --foreground: 222.2 84% 4.9%;
-
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    /* Meta IT Brand Colors - Blue/Purple gradient */
+    --popover-foreground: 222 47% 11%;
     --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
-
-    --secondary: 270 67% 47%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
-
-    --accent: 270 67% 47%;
-    --accent-foreground: 210 40% 98%;
-
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
     --ring: 221 83% 53%;
-
     --radius: 0.75rem;
-
-    /* Section Colors */
-    --section-summary: 221 83% 53%;
-    --section-evidence: 270 67% 47%;
-    --section-pains: 25 95% 53%;
-    --section-solutions: 142 76% 36%;
-    --section-questions: 199 89% 48%;
-    --section-script: 330 81% 60%;
-
-    /* Sidebar */
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 220 9% 26%;
+    --sidebar-foreground: 222 47% 11%;
     --sidebar-primary: 221 83% 53%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 220 14% 96%;
-    --sidebar-accent-foreground: 220 9% 26%;
-    --sidebar-border: 220 13% 91%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 32% 91%;
     --sidebar-ring: 221 83% 53%;
   }
 
   .dark {
-    --background: 222 47% 11%;
+    --background: 222 47% 6%;
     --foreground: 210 40% 98%;
-
-    --card: 222 47% 13%;
+    --card: 222 47% 9%;
     --card-foreground: 210 40% 98%;
-
-    --popover: 222 47% 13%;
+    --popover: 222 47% 9%;
     --popover-foreground: 210 40% 98%;
-
     --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
-
-    --secondary: 270 67% 47%;
+    --secondary: 217 33% 17%;
     --secondary-foreground: 210 40% 98%;
-
     --muted: 217 33% 17%;
     --muted-foreground: 215 20% 65%;
-
-    --accent: 270 67% 47%;
+    --accent: 217 33% 17%;
     --accent-foreground: 210 40% 98%;
-
     --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
-
     --border: 217 33% 17%;
     --input: 217 33% 17%;
     --ring: 221 83% 53%;
-
-    --sidebar-background: 222 47% 11%;
+    --sidebar-background: 222 47% 8%;
     --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 221 83% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
@@ -106,33 +77,6 @@
   }
 }
 
-@layer components {
-  .section-card {
-    @apply rounded-xl border bg-card shadow-sm transition-all duration-200 hover:shadow-md;
-  }
-
-  .section-header {
-    @apply flex items-center gap-2 font-semibold;
-  }
-
-  .gradient-header {
-    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
-  }
-
-  .analysis-node {
-    @apply rounded-xl border-2 bg-card shadow-lg transition-all duration-200;
-  }
-
-  .analysis-node:hover {
-    @apply shadow-xl scale-[1.02];
-  }
-
-  .analysis-node.selected {
-    @apply ring-2 ring-primary ring-offset-2;
-  }
-}
-
-/* Custom scrollbar */
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
@@ -141,6 +85,7 @@
 
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {

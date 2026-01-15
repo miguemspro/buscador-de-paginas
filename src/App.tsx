@@ -1,105 +1,79 @@
-import { ReactFlowProvider } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
-import { useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import ImageUpload from './components/Sidebar/ImageUpload';
-import LeadForm from './components/Sidebar/LeadForm';
-import ProspectCanvas from './components/Canvas/ProspectCanvas';
-import AnalysisPanel from './components/Sidebar/AnalysisPanel';
-import { useLeadStore } from './store/leadStore';
-import { Upload, FileText, LayoutGrid, MessageSquare } from 'lucide-react';
+import { usePlaybookStore } from './store/playbookStore';
+import UploadStep from './components/Playbook/UploadStep';
+import ProcessingStep from './components/Playbook/ProcessingStep';
+import PlaybookView from './components/Playbook/PlaybookView';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<string>('upload');
-  const { analysis, leadInfo, error } = useLeadStore();
+  const { currentStep, error, setError, reset } = usePlaybookStore();
 
-  const handleAnalysisGenerated = () => {
-    setActiveTab('analysis');
+  // Render based on current step
+  const renderStep = () => {
+    switch (currentStep) {
+      case 'upload':
+        return <UploadStep />;
+      case 'extracting':
+      case 'context':
+      case 'generating':
+        return <ProcessingStep />;
+      case 'playbook':
+        return <PlaybookView />;
+      default:
+        return <UploadStep />;
+    }
   };
 
   return (
-    <ReactFlowProvider>
-      <div className="flex flex-col h-screen">
-        {/* Header */}
-        <header className="gradient-header text-white p-4 shadow-lg">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-background">
+      {/* Header - shown only on upload/processing */}
+      {currentStep !== 'playbook' && (
+        <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
+          <div className="container flex items-center justify-between h-16 px-4">
             <div>
-              <h1 className="text-2xl font-bold">SDR ProspectFlow</h1>
-              <p className="text-sm text-primary-foreground/80">
-                Análise Inteligente de Leads com IA
+              <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                SDR ProspectFlow
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Playbook de Abordagem com IA
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              {leadInfo && (
-                <div className="text-right">
-                  <p className="text-xs text-primary-foreground/70">Lead atual</p>
-                  <p className="font-semibold">{leadInfo.name} - {leadInfo.company}</p>
-                </div>
-              )}
-              <div className="text-right border-l border-white/20 pl-4">
-                <p className="text-xs text-primary-foreground/70">Powered by</p>
-                <p className="font-semibold">Meta IT × IA</p>
-              </div>
+            <div className="text-right text-xs text-muted-foreground">
+              <p>Powered by</p>
+              <p className="font-semibold text-foreground">Meta IT × IA</p>
             </div>
           </div>
         </header>
+      )}
 
-        {/* Main Content */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left Sidebar */}
-          <div className="w-[400px] border-r bg-card flex flex-col">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
-              <TabsList className="grid w-full grid-cols-4 p-1 m-2">
-                <TabsTrigger value="upload" className="gap-1 text-xs">
-                  <Upload className="h-3 w-3" />
-                  Print
-                </TabsTrigger>
-                <TabsTrigger value="form" className="gap-1 text-xs">
-                  <FileText className="h-3 w-3" />
-                  Manual
-                </TabsTrigger>
-                <TabsTrigger value="analysis" disabled={!analysis} className="gap-1 text-xs">
-                  <LayoutGrid className="h-3 w-3" />
-                  Análise
-                </TabsTrigger>
-                <TabsTrigger value="script" disabled={!analysis} className="gap-1 text-xs">
-                  <MessageSquare className="h-3 w-3" />
-                  Script
-                </TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="upload" className="flex-1 overflow-hidden m-0">
-                <ImageUpload onAnalysisGenerated={handleAnalysisGenerated} />
-              </TabsContent>
-              
-              <TabsContent value="form" className="flex-1 overflow-hidden m-0">
-                <LeadForm onAnalysisGenerated={handleAnalysisGenerated} />
-              </TabsContent>
-              
-              <TabsContent value="analysis" className="flex-1 overflow-hidden m-0">
-                <AnalysisPanel view="full" />
-              </TabsContent>
-              
-              <TabsContent value="script" className="flex-1 overflow-hidden m-0">
-                <AnalysisPanel view="script" />
-              </TabsContent>
-            </Tabs>
-
-            {/* Error Display */}
-            {error && (
-              <div className="p-4 bg-destructive/10 text-destructive text-sm border-t">
-                {error}
-              </div>
-            )}
-          </div>
-
-          {/* Center - Canvas */}
-          <div className="flex-1">
-            <ProspectCanvas />
-          </div>
+      {/* Error Alert */}
+      {error && (
+        <div className="container px-4 py-4">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>{error}</span>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => {
+                  setError(null);
+                  reset();
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </AlertDescription>
+          </Alert>
         </div>
-      </div>
-    </ReactFlowProvider>
+      )}
+
+      {/* Main Content */}
+      <main>
+        {renderStep()}
+      </main>
+    </div>
   );
 }
 
