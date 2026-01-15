@@ -1,96 +1,87 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Cases de sucesso por segmento para referência do SDR
-const CASES_BY_SEGMENT: Record<string, { company: string; result: string }[]> = {
-  agro: [
-    { company: "SLC Agrícola", result: "Redução de 40% no tempo de fechamento contábil com SAP S/4HANA" },
-    { company: "Amaggi", result: "Integração de 15 unidades em tempo real com SAP BTP" },
-    { company: "Tereos", result: "Automação de processos de originação com 60% menos erros" },
-    { company: "Cooperativa Agrícola", result: "Visibilidade completa da cadeia com SAP IBP" },
-  ],
-  industria: [
-    { company: "WEG", result: "Implementação global de SAP S/4HANA em 12 países" },
-    { company: "Tigre", result: "Redução de 35% no lead time com SAP Digital Manufacturing" },
-    { company: "Gerdau", result: "Integração de plantas com SAP MES e IoT" },
-    { company: "Votorantim", result: "Transformação digital com SAP e economia de R$50M/ano" },
-  ],
-  varejo: [
-    { company: "Riachuelo", result: "Omnichannel integrado com SAP Commerce e redução de ruptura em 25%" },
-    { company: "Grupo Mateus", result: "Expansão de 50 lojas com SAP sem impacto operacional" },
-    { company: "Pague Menos", result: "Integração de e-commerce com SAP em 3 meses" },
-    { company: "Vivara", result: "Gestão unificada de estoques com SAP S/4HANA Retail" },
-  ],
-  financeiro: [
-    { company: "BTG Pactual", result: "Compliance automatizado com SAP GRC" },
-    { company: "Porto Seguro", result: "Redução de 45% no tempo de processamento de sinistros" },
-    { company: "XP Investimentos", result: "Escalabilidade com SAP na nuvem" },
-    { company: "Banco Inter", result: "Integração de backoffice com Open Banking via SAP BTP" },
-  ],
-  saude: [
-    { company: "Rede D'Or", result: "Gestão integrada de 50+ hospitais com SAP" },
-    { company: "Fleury", result: "Automação de laudos e redução de 30% no tempo de entrega" },
-    { company: "Hapvida", result: "Integração pós-fusão com SAP em 6 meses" },
-    { company: "Dasa", result: "Analytics preditivo para gestão de leitos" },
-  ],
-  energia: [
-    { company: "Raízen", result: "Transformação S/4HANA com integração de cogeração" },
-    { company: "CPFL", result: "Gestão de ativos com SAP PM/EAM e redução de 20% em manutenção" },
-    { company: "Eneva", result: "Planejamento integrado de geração com SAP IBP" },
-    { company: "Neoenergia", result: "Compliance regulatório automatizado com SAP" },
-  ],
-  logistica: [
-    { company: "JSL", result: "TMS integrado com SAP e visibilidade em tempo real" },
-    { company: "Movida", result: "Gestão de frota com SAP e redução de 15% em custos" },
-    { company: "Localiza", result: "Escala pós-fusão com SAP S/4HANA" },
-    { company: "Santos Brasil", result: "Automação portuária com SAP EWM" },
-  ],
-  tecnologia: [
-    { company: "TOTVS", result: "Migração para SAP S/4HANA Cloud" },
-    { company: "Positivo", result: "Gestão de supply chain global com SAP Ariba" },
-    { company: "Intelbras", result: "Integração de fábricas com SAP Digital Core" },
-  ],
-  construcao: [
-    { company: "MRV", result: "Gestão de empreendimentos com SAP RE-FX" },
-    { company: "Cyrela", result: "Integração financeira e de projetos com SAP" },
-    { company: "Even", result: "Controle de custos de obras com SAP PS" },
-  ],
-  servicos: [
-    { company: "Grupo GPS", result: "Gestão de 100k+ colaboradores com SAP SuccessFactors" },
-    { company: "Algar Tech", result: "Automação de processos de RH com SAP" },
-  ],
-};
+// Função para buscar cases relevantes do banco de dados
+async function findRelevantCasesFromDB(industry: string | undefined): Promise<{ company: string; result: string; title: string; solutions: string[] }[]> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Função para encontrar cases relevantes baseado no segmento
-function findRelevantCases(industry: string | undefined): { company: string; result: string }[] {
-  if (!industry) return CASES_BY_SEGMENT.industria;
-  
-  const lowerIndustry = industry.toLowerCase();
-  
-  const segmentMap: Record<string, string[]> = {
-    agro: ['agro', 'agrícola', 'agricultura', 'fazenda', 'commodities', 'grãos', 'soja', 'milho', 'café', 'açúcar', 'etanol'],
-    industria: ['indústria', 'manufatura', 'fábrica', 'industrial', 'metalurgia', 'siderurgia', 'química', 'plástico'],
-    varejo: ['varejo', 'retail', 'loja', 'comércio', 'e-commerce', 'shopping', 'supermercado', 'farmácia'],
-    financeiro: ['banco', 'financeiro', 'seguro', 'investimento', 'fintech', 'crédito', 'pagamento'],
-    saude: ['saúde', 'hospital', 'clínica', 'laboratório', 'farmacêutica', 'médico', 'diagnóstico'],
-    energia: ['energia', 'elétrica', 'petróleo', 'gás', 'renovável', 'solar', 'eólica', 'utilidade'],
-    logistica: ['logística', 'transporte', 'distribuição', 'armazém', 'frota', 'supply chain'],
-    tecnologia: ['tecnologia', 'software', 'ti', 'tech', 'digital', 'telecom'],
-    construcao: ['construção', 'imobiliário', 'incorporadora', 'engenharia', 'obras'],
-    servicos: ['serviços', 'consultoria', 'terceirização', 'facilities', 'bpo'],
-  };
-  
-  for (const [segment, keywords] of Object.entries(segmentMap)) {
-    if (keywords.some(kw => lowerIndustry.includes(kw))) {
-      return CASES_BY_SEGMENT[segment] || CASES_BY_SEGMENT.industria;
-    }
+  if (!industry) {
+    // Se não há indústria, pegar cases genéricos de indústria
+    const { data } = await supabase
+      .from('meta_cases')
+      .select('company_name, results, title, sap_solutions')
+      .limit(4);
+    
+    return (data || []).map(c => ({
+      company: c.company_name,
+      result: c.results?.[0] || '',
+      title: c.title,
+      solutions: c.sap_solutions || []
+    }));
   }
-  
-  return CASES_BY_SEGMENT.industria;
+
+  const lowerIndustry = industry.toLowerCase();
+
+  // Buscar cases onde alguma keyword bate com a indústria
+  const { data: allCases } = await supabase
+    .from('meta_cases')
+    .select('company_name, industry, industry_keywords, results, title, sap_solutions, description');
+
+  if (!allCases || allCases.length === 0) {
+    return [];
+  }
+
+  // Filtrar cases que têm keywords matching
+  const matchingCases = allCases.filter(caseItem => {
+    const keywords = caseItem.industry_keywords || [];
+    return keywords.some((kw: string) => lowerIndustry.includes(kw) || kw.includes(lowerIndustry));
+  });
+
+  // Se encontrou cases específicos, retornar eles
+  if (matchingCases.length > 0) {
+    return matchingCases.slice(0, 4).map(c => ({
+      company: c.company_name,
+      result: c.results?.[0] || c.description,
+      title: c.title,
+      solutions: c.sap_solutions || []
+    }));
+  }
+
+  // Se não encontrou exato, buscar cases de indústrias similares
+  // Tentar match parcial na indústria
+  const partialMatches = allCases.filter(caseItem => {
+    const caseIndustry = (caseItem.industry || '').toLowerCase();
+    return caseIndustry.includes(lowerIndustry.split('/')[0]) || 
+           lowerIndustry.includes(caseIndustry.split('/')[0]);
+  });
+
+  if (partialMatches.length > 0) {
+    return partialMatches.slice(0, 4).map(c => ({
+      company: c.company_name,
+      result: c.results?.[0] || c.description,
+      title: c.title,
+      solutions: c.sap_solutions || []
+    }));
+  }
+
+  // Fallback: retornar alguns cases genéricos de manufatura/indústria
+  const fallbackCases = allCases
+    .filter(c => c.industry?.toLowerCase().includes('indústria') || c.industry?.toLowerCase().includes('manufatura'))
+    .slice(0, 4);
+
+  return fallbackCases.map(c => ({
+    company: c.company_name,
+    result: c.results?.[0] || c.description,
+    title: c.title,
+    solutions: c.sap_solutions || []
+  }));
 }
 
 // System prompt para geração do playbook consultivo
@@ -98,68 +89,73 @@ const SYSTEM_PROMPT = `Você é um especialista em vendas consultivas B2B da Met
 
 Sua tarefa é gerar um PLAYBOOK CONSULTIVO COMPLETO para um SDR se preparar para uma ligação de prospecção.
 
-REGRAS CRÍTICAS:
-1. O playbook deve ter EXATAMENTE 6 seções estruturadas
-2. Use tom consultivo e profissional, nunca vendedor agressivo
-3. Baseie-se em sinais públicos reais do mercado e do segmento do lead
-4. As evidências devem ter links plausíveis para fontes reais (LinkedIn, portais de negócios, SAP News)
-5. O texto de abordagem deve ser CONVERSACIONAL, não um pitch de vendas
-6. Foque em diagnóstico e entendimento antes de apresentar soluções
+REGRAS CRÍTICAS - LEIA COM ATENÇÃO:
+
+1. EVIDÊNCIAS: RETORNE SEMPRE UM ARRAY VAZIO []
+   - Você NÃO tem acesso a informações reais e verificáveis sobre a empresa
+   - NÃO invente notícias, eventos ou acontecimentos
+   - O SDR vai pesquisar manualmente no LinkedIn e Google
+   - Qualquer evidência inventada é pior que nenhuma evidência
+
+2. DORES: DEVEM SER BASEADAS EM FATOS CONCRETOS
+   - Baseie as dores APENAS em informações fornecidas (cargo, setor, status SAP)
+   - NÃO suponha dores sem embasamento
+   - Cada dor deve ter um MOTIVO REAL baseado no contexto fornecido
+   - Se o lead é de Manufatura com SAP ECC, dores sobre deadline 2027 são válidas
+   - Se não há informação sobre algo, NÃO presuma dores sobre isso
+
+3. PERFIL DO LEAD: DEVE REFLETIR O CARGO
+   - Baseie o perfil EXCLUSIVAMENTE no cargo informado
+   - NÃO invente características pessoais
+   - Descreva o que profissionais NESSE CARGO tipicamente valorizam
+   - Exemplo: "Como IT Manager, provavelmente foca em estabilidade, compliance e eficiência operacional"
+
+4. SOLUÇÕES: DEVEM MAPEAR DIRETAMENTE COM AS DORES
+   - Cada solução deve resolver uma dor específica listada
+   - Use os cases de sucesso fornecidos como referência
+   - Mencione soluções SAP específicas quando aplicável
+
+5. PRIORIDADES E CONTEXTO: BASEADOS NO SETOR
+   - Use conhecimento geral sobre o setor do lead
+   - Deadline SAP 2027 é relevante para quem usa ECC
+   - Mencione tendências do setor, não da empresa específica
 
 ESTRUTURA DAS 6 SEÇÕES:
 
 1. RESUMO EXECUTIVO (5 bullets):
-   - Contexto da empresa e por que SAP é crítico
-   - Perfil do lead e o que ele valoriza (baseado no cargo)
-   - 2 hipóteses de prioridade para 2025/2026
+   - Contexto da empresa e por que SAP é crítico (baseado no setor)
+   - Perfil do lead (baseado APENAS no cargo fornecido)
+   - 2 hipóteses de prioridade (baseadas no setor, não na empresa)
    - Melhor ângulo de abordagem
-   - Contexto público recente
+   - Contexto do setor (tendências gerais, não notícias da empresa)
 
-2. EVIDÊNCIAS E NOTÍCIAS (0-6 itens):
-   REGRA CRÍTICA: NÃO INVENTE EVIDÊNCIAS! 
-   
-   Se você não tem informação REAL e VERIFICÁVEL sobre a empresa ou lead, retorne um array VAZIO [].
-   
-   Em vez de links (que não funcionam), forneça SUGESTÕES DE PESQUISA para o SDR:
-   - O campo "link" deve conter instruções de onde pesquisar, não URLs falsas
-   - Exemplo de link: "Pesquisar no LinkedIn: [Nome da Empresa] + transformação digital"
-   - Exemplo de link: "Buscar no Google: '[Nome da Empresa]' + SAP + 2024"
-   
-   Cada item deve ser uma HIPÓTESE PLAUSÍVEL baseada no segmento:
-   - Título: hipótese de notícia provável para o segmento
-   - Indicação: o que isso indicaria se confirmado
-   - Link: sugestão de onde o SDR pode pesquisar para validar
-   - Fonte: tipo de fonte sugerida (LinkedIn, Google News, site da empresa, etc.)
-   
-   Se não houver informações específicas conhecidas sobre a empresa, retorne array vazio.
-   É MELHOR não ter evidências do que ter evidências falsas!
+2. EVIDÊNCIAS E NOTÍCIAS: SEMPRE RETORNE ARRAY VAZIO []
+   - Você NÃO tem acesso a informações reais
+   - O SDR vai pesquisar manualmente
 
-3. DORES PROVÁVEIS (10 itens):
-   - Baseadas no segmento e contexto do lead
-   - Cada dor com: descrição da dor + motivo plausível
+3. DORES PROVÁVEIS (5-10 itens):
+   - APENAS dores com embasamento no contexto fornecido
+   - Se há menos informações, liste menos dores
+   - Cada dor deve ter motivo real e verificável
 
-4. COMO A META IT PODE AJUDAR (10 itens):
-   - Mapeamento 1:1 com as dores
-   - Cada item: dor que resolve + solução Meta IT + descrição
+4. COMO A META IT PODE AJUDAR (mesmo número que dores):
+   - 1:1 com as dores listadas
+   - Use os cases de sucesso como referência
 
 5. PERGUNTAS DE DISCOVERY (12 perguntas em 3 grupos):
-   - 4 sobre fase/projetos e prioridades 2025/2026
-   - 4 sobre operação/integrações/estabilidade
-   - 4 sobre qualificação (janela crítica, stakeholders, capacidade, governança)
+   - 4 sobre fase/projetos e prioridades
+   - 4 sobre operação/integrações
+   - 4 sobre qualificação
 
-6. TEXTO FINAL DE ABORDAGEM:
-   - Abertura educada e natural
-   - Menção aos sinais públicos observados
-   - Intenção clara: entender cenário antes de apresentar solução
-   - 2 perguntas estratégicas para abrir a conversa
-   - Texto completo para o SDR usar
+6. TEXTO DE ABORDAGEM:
+   - Sem mencionar evidências específicas (você não tem)
+   - Foque em entender o cenário
+   - Use conhecimento do setor, não da empresa
 
 SOBRE A META IT:
 - 35 anos de experiência em soluções SAP
 - +120 clientes em +25 segmentos
-- Especialistas em: Migração S/4HANA, AMS, Outsourcing, Reforma Tributária, SAP BTP
-
-IMPORTANTE: Os cases de sucesso serão fornecidos na mensagem do usuário. Use-os naturalmente no texto de abordagem quando apropriado.`;
+- Especialistas em: Migração S/4HANA, AMS, Outsourcing, Reforma Tributária, SAP BTP`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -183,12 +179,18 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY não configurada');
     }
 
-    const relevantCases = findRelevantCases(leadData.industry);
-    const casesText = relevantCases.map(c => `- ${c.company}: ${c.result}`).join('\n');
+    // Buscar cases relevantes do banco de dados
+    console.log('Buscando cases para indústria:', leadData.industry);
+    const relevantCases = await findRelevantCasesFromDB(leadData.industry);
+    console.log('Cases encontrados:', relevantCases.length);
+
+    const casesText = relevantCases.length > 0 
+      ? relevantCases.map(c => `- ${c.company} (${c.title}): ${c.result}`).join('\n')
+      : 'Nenhum case específico encontrado para este segmento. Use cases genéricos de transformação SAP.';
 
     const userPrompt = `Gere um PLAYBOOK CONSULTIVO COMPLETO para este lead:
 
-DADOS DO LEAD:
+DADOS DO LEAD (use APENAS estas informações):
 - Nome: ${leadData.name || 'Não informado'}
 - Cargo: ${leadData.role || 'Não informado'}
 - Empresa: ${leadData.company || 'Não informada'}
@@ -199,10 +201,16 @@ DADOS DO LEAD:
 - Sinais Públicos: ${leadData.publicSignals || 'Não informados'}
 - Origem: ${leadData.leadSource || 'Salesforce'}
 
-CASES DE SUCESSO DO SEGMENTO (use naturalmente no texto de abordagem):
+CASES DE SUCESSO REAIS DA META IT (use como referência para soluções):
 ${casesText}
 
-Gere o playbook completo com as 6 seções especificadas.`;
+LEMBRETE CRÍTICO:
+- Evidências: SEMPRE array vazio []
+- Dores: APENAS com embasamento no contexto acima
+- Perfil: Baseado APENAS no cargo "${leadData.role || 'não informado'}"
+- Não invente nada que não esteja nos dados fornecidos
+
+Gere o playbook com as 6 seções especificadas.`;
 
     console.log('Gerando playbook para:', leadData.name, '-', leadData.company);
 
@@ -230,47 +238,45 @@ Gere o playbook completo com as 6 seções especificadas.`;
                   type: 'object',
                   description: 'Resumo executivo em 5 bullets',
                   properties: {
-                    companyContext: { type: 'string', description: 'Contexto da empresa e por que SAP é crítico' },
-                    leadProfile: { type: 'string', description: 'Perfil do lead e o que ele valoriza' },
-                    priorities2026: { type: 'string', description: '2 hipóteses de prioridade para 2025/2026' },
+                    companyContext: { type: 'string', description: 'Contexto do SETOR e por que SAP é crítico (não da empresa específica)' },
+                    leadProfile: { type: 'string', description: 'Perfil baseado APENAS no cargo informado' },
+                    priorities2026: { type: 'string', description: '2 hipóteses de prioridade baseadas no SETOR' },
                     approachAngle: { type: 'string', description: 'Melhor ângulo de abordagem (diagnóstico primeiro)' },
-                    publicContext: { type: 'string', description: 'Contexto público recente observado' }
+                    publicContext: { type: 'string', description: 'Tendências gerais do SETOR (não notícias da empresa)' }
                   },
                   required: ['companyContext', 'leadProfile', 'priorities2026', 'approachAngle', 'publicContext']
                 },
                 evidences: {
                   type: 'array',
-                  description: 'Sugestões de pesquisa sobre a empresa (0-6 itens). Se não houver informações reais conhecidas, retorne array vazio []',
+                  description: 'DEVE SER ARRAY VAZIO []. Você não tem acesso a informações reais da empresa.',
                   items: {
                     type: 'object',
                     properties: {
-                      title: { type: 'string', description: 'Hipótese de evidência baseada no segmento da empresa' },
-                      indication: { type: 'string', description: 'O que isso indicaria se confirmado pelo SDR' },
-                      link: { type: 'string', description: 'Sugestão de pesquisa (ex: Pesquisar no LinkedIn: empresa + tema)' },
-                      source: { type: 'string', description: 'Tipo de fonte sugerida (LinkedIn, Google News, site da empresa)' }
-                    },
-                    required: ['title', 'indication', 'link', 'source']
+                      title: { type: 'string' },
+                      indication: { type: 'string' },
+                      link: { type: 'string' },
+                      source: { type: 'string' }
+                    }
                   },
-                  minItems: 0,
-                  maxItems: 6
+                  maxItems: 0
                 },
                 probablePains: {
                   type: 'array',
-                  description: 'Dores prováveis baseadas no contexto (10 itens)',
+                  description: 'Dores com embasamento REAL no contexto fornecido (5-10 itens)',
                   items: {
                     type: 'object',
                     properties: {
                       pain: { type: 'string', description: 'Descrição da dor' },
-                      reason: { type: 'string', description: 'Motivo plausível para essa dor' }
+                      reason: { type: 'string', description: 'Motivo REAL baseado nas informações fornecidas' }
                     },
                     required: ['pain', 'reason']
                   },
-                  minItems: 10,
+                  minItems: 5,
                   maxItems: 10
                 },
                 metaSolutions: {
                   type: 'array',
-                  description: 'Soluções Meta IT mapeadas 1:1 com as dores (10 itens)',
+                  description: 'Soluções Meta IT mapeadas 1:1 com as dores',
                   items: {
                     type: 'object',
                     properties: {
@@ -280,7 +286,7 @@ Gere o playbook completo com as 6 seções especificadas.`;
                     },
                     required: ['pain', 'solution', 'description']
                   },
-                  minItems: 10,
+                  minItems: 5,
                   maxItems: 10
                 },
                 discoveryQuestions: {
@@ -290,7 +296,7 @@ Gere o playbook completo com as 6 seções especificadas.`;
                     phaseAndPriorities: {
                       type: 'array',
                       items: { type: 'string' },
-                      description: '4 perguntas sobre fase/projetos/prioridades 2025/2026',
+                      description: '4 perguntas sobre fase/projetos/prioridades',
                       minItems: 4,
                       maxItems: 4
                     },
@@ -316,7 +322,7 @@ Gere o playbook completo com as 6 seções especificadas.`;
                   description: 'Texto final de abordagem estruturado',
                   properties: {
                     opening: { type: 'string', description: 'Abertura educada e natural' },
-                    publicSignalsMention: { type: 'string', description: 'Menção aos sinais públicos observados' },
+                    publicSignalsMention: { type: 'string', description: 'Menção a tendências do SETOR (não da empresa)' },
                     clearIntention: { type: 'string', description: 'Intenção clara: entender antes de apresentar' },
                     strategicQuestions: {
                       type: 'array',
@@ -362,10 +368,14 @@ Gere o playbook completo com as 6 seções especificadas.`;
     }
 
     const playbook = JSON.parse(toolCall.function.arguments);
+    
+    // Garantir que evidences é sempre array vazio
+    playbook.evidences = [];
+    
     console.log('Playbook gerado com sucesso');
 
     return new Response(
-      JSON.stringify({ playbook }),
+      JSON.stringify({ playbook, relevantCases }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

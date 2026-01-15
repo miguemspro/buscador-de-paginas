@@ -165,73 +165,75 @@ ${playbook.approachScript?.fullText || ''}
       </header>
 
       <div className="container px-4 py-6">
-        <div className="grid lg:grid-cols-4 gap-6">
+        <div className="flex gap-6">
           
-          {/* Left Sidebar - Lead Context + Navigation */}
-          <div className="lg:col-span-1 space-y-4">
-            {/* Lead Info Card */}
-            <Card className="p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <User className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold">Lead</h3>
-              </div>
-              
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xl font-bold">{extractedData?.name || 'Lead'}</p>
-                  <p className="text-sm text-muted-foreground">{extractedData?.role}</p>
+          {/* Left Sidebar - Lead Context + Navigation - FIXED */}
+          <aside className="hidden lg:block w-72 flex-shrink-0">
+            <div className="sticky top-20 space-y-4">
+              {/* Lead Info Card */}
+              <Card className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <User className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold">Lead</h3>
                 </div>
                 
-                <div className="flex items-center gap-2 text-sm">
-                  <Building2 className="h-4 w-4 text-muted-foreground" />
-                  <span>{extractedData?.company}</span>
-                </div>
-                
-                {extractedData?.industry && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    <span>{extractedData.industry}</span>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xl font-bold">{extractedData?.name || 'Lead'}</p>
+                    <p className="text-sm text-muted-foreground">{extractedData?.role}</p>
                   </div>
-                )}
+                  
+                  <div className="flex items-center gap-2 text-sm">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <span>{extractedData?.company}</span>
+                  </div>
+                  
+                  {extractedData?.industry && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Briefcase className="h-4 w-4 text-muted-foreground" />
+                      <span>{extractedData.industry}</span>
+                    </div>
+                  )}
 
-                {extractedData?.sapStatus && (
-                  <Badge variant="outline" className="mt-2">
-                    SAP: {extractedData.sapStatus}
-                  </Badge>
-                )}
-              </div>
-            </Card>
+                  {extractedData?.sapStatus && (
+                    <Badge variant="outline" className="mt-2">
+                      SAP: {extractedData.sapStatus}
+                    </Badge>
+                  )}
+                </div>
+              </Card>
 
-            {/* Section Navigation */}
-            <Card className="p-3">
-              <nav className="space-y-1">
-                {sections.map((section) => {
-                  const Icon = section.icon;
-                  return (
-                    <button
-                      key={section.id}
-                      onClick={() => {
-                        setActiveSection(section.id);
-                        document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' });
-                      }}
-                      className={cn(
-                        'w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors text-left',
-                        activeSection === section.id
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-muted'
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                      {section.label}
-                    </button>
-                  );
-                })}
-              </nav>
-            </Card>
-          </div>
+              {/* Section Navigation */}
+              <Card className="p-3">
+                <nav className="space-y-1">
+                  {sections.map((section) => {
+                    const Icon = section.icon;
+                    return (
+                      <button
+                        key={section.id}
+                        onClick={() => {
+                          setActiveSection(section.id);
+                          document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                        className={cn(
+                          'w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors text-left',
+                          activeSection === section.id
+                            ? 'bg-primary text-primary-foreground'
+                            : 'hover:bg-muted'
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {section.label}
+                      </button>
+                    );
+                  })}
+                </nav>
+              </Card>
+            </div>
+          </aside>
 
           {/* Main Content */}
-          <div className="lg:col-span-3 space-y-6">
+          <main className="flex-1 min-w-0 space-y-6">
             
             {/* 1. RESUMO EXECUTIVO */}
             <Card className="p-6" id="summary">
@@ -272,7 +274,7 @@ ${playbook.approachScript?.fullText || ''}
               )}
             </Card>
 
-            {/* 2. EVIDÊNCIAS E NOTÍCIAS */}
+            {/* 2. PESQUISA DE EVIDÊNCIAS */}
             <Card className="p-6" id="evidences">
               <button 
                 onClick={() => toggleSection('evidences')}
@@ -280,52 +282,76 @@ ${playbook.approachScript?.fullText || ''}
               >
                 <h2 className="font-semibold text-lg flex items-center gap-2">
                   <ExternalLink className="h-5 w-5 text-blue-500" />
-                  2. Evidências e Notícias
-                  <Badge variant="secondary" className="ml-2">{playbook.evidences?.length || 0}</Badge>
+                  2. Pesquisa de Evidências
                 </h2>
                 {expandedSections.evidences ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
               </button>
               
               {expandedSections.evidences && (
                 <div className="space-y-4">
-                  {(!playbook.evidences || playbook.evidences.length === 0) ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <HelpCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">Nenhuma evidência específica encontrada.</p>
-                      <p className="text-xs mt-1">Pesquise manualmente no LinkedIn e Google sobre a empresa.</p>
-                    </div>
-                  ) : (
+                  <div className="bg-muted/50 rounded-lg p-4 border border-dashed">
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Pesquise informações públicas sobre a empresa para personalizar sua abordagem:
+                    </p>
+                    
                     <div className="grid gap-3 sm:grid-cols-2">
-                      {playbook.evidences.map((evidence, i) => {
-                        // Criar URL de busca no Google com base no título
-                        const searchQuery = encodeURIComponent(`"${extractedData?.company || ''}" ${evidence.title.replace(/^\[.*?\]\s*/, '')}`);
-                        const googleSearchUrl = `https://www.google.com/search?q=${searchQuery}`;
-                        
-                        return (
-                          <div key={i} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
-                            <p className="font-medium text-sm mb-2">{evidence.title}</p>
-                            <p className="text-sm text-muted-foreground mb-3">
-                              <span className="text-primary">→</span> {evidence.indication}
-                            </p>
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs text-muted-foreground italic">
-                                📍 {evidence.link}
-                              </span>
-                              <a 
-                                href={googleSearchUrl}
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 transition-colors"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                                Pesquisar
-                              </a>
-                            </div>
-                          </div>
-                        );
-                      })}
+                      <a
+                        href={`https://www.linkedin.com/search/results/content/?keywords="${encodeURIComponent(extractedData?.company || '')}"`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-3 bg-background border rounded-lg hover:bg-muted transition-colors"
+                      >
+                        <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white text-xs font-bold">in</div>
+                        <div>
+                          <p className="text-sm font-medium">LinkedIn da Empresa</p>
+                          <p className="text-xs text-muted-foreground">Posts e atualizações recentes</p>
+                        </div>
+                        <ExternalLink className="h-4 w-4 ml-auto text-muted-foreground" />
+                      </a>
+                      
+                      <a
+                        href={`https://www.google.com/search?q="${encodeURIComponent(extractedData?.company || '')}" SAP 2024&tbm=nws`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-3 bg-background border rounded-lg hover:bg-muted transition-colors"
+                      >
+                        <div className="w-8 h-8 bg-red-500 rounded flex items-center justify-center text-white text-xs font-bold">G</div>
+                        <div>
+                          <p className="text-sm font-medium">Notícias no Google</p>
+                          <p className="text-xs text-muted-foreground">Notícias recentes da empresa</p>
+                        </div>
+                        <ExternalLink className="h-4 w-4 ml-auto text-muted-foreground" />
+                      </a>
+                      
+                      <a
+                        href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(extractedData?.name || '')} ${encodeURIComponent(extractedData?.company || '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-3 bg-background border rounded-lg hover:bg-muted transition-colors"
+                      >
+                        <User className="w-8 h-8 p-1.5 bg-blue-600 rounded text-white" />
+                        <div>
+                          <p className="text-sm font-medium">Perfil do Lead</p>
+                          <p className="text-xs text-muted-foreground">LinkedIn de {extractedData?.name?.split(' ')[0]}</p>
+                        </div>
+                        <ExternalLink className="h-4 w-4 ml-auto text-muted-foreground" />
+                      </a>
+                      
+                      <a
+                        href={`https://www.google.com/search?q="${encodeURIComponent(extractedData?.company || '')}" transformação digital tecnologia`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-3 bg-background border rounded-lg hover:bg-muted transition-colors"
+                      >
+                        <TrendingUp className="w-8 h-8 p-1.5 bg-green-500 rounded text-white" />
+                        <div>
+                          <p className="text-sm font-medium">Iniciativas de TI</p>
+                          <p className="text-xs text-muted-foreground">Projetos de transformação digital</p>
+                        </div>
+                        <ExternalLink className="h-4 w-4 ml-auto text-muted-foreground" />
+                      </a>
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
             </Card>
@@ -519,7 +545,7 @@ ${playbook.approachScript?.fullText || ''}
               )}
             </Card>
 
-          </div>
+          </main>
         </div>
       </div>
     </div>
