@@ -14,7 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      meta_cases: {
+        Row: {
+          case_url: string | null
+          company_name: string
+          created_at: string
+          description: string
+          id: string
+          industry: string
+          industry_keywords: string[]
+          results: string[]
+          sap_solutions: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          case_url?: string | null
+          company_name: string
+          created_at?: string
+          description: string
+          id?: string
+          industry: string
+          industry_keywords?: string[]
+          results?: string[]
+          sap_solutions?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          case_url?: string | null
+          company_name?: string
+          created_at?: string
+          description?: string
+          id?: string
+          industry?: string
+          industry_keywords?: string[]
+          results?: string[]
+          sap_solutions?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
