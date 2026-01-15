@@ -287,24 +287,45 @@ ${playbook.approachScript?.fullText || ''}
               </button>
               
               {expandedSections.evidences && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {playbook.evidences?.map((evidence, i) => (
-                    <div key={i} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
-                      <p className="font-medium text-sm mb-2">{evidence.title}</p>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        <span className="text-primary">→</span> {evidence.indication}
-                      </p>
-                      <a 
-                        href={evidence.link} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-blue-500 hover:underline"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        {evidence.source}
-                      </a>
+                <div className="space-y-4">
+                  {(!playbook.evidences || playbook.evidences.length === 0) ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <HelpCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Nenhuma evidência específica encontrada.</p>
+                      <p className="text-xs mt-1">Pesquise manualmente no LinkedIn e Google sobre a empresa.</p>
                     </div>
-                  ))}
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {playbook.evidences.map((evidence, i) => {
+                        // Criar URL de busca no Google com base no título
+                        const searchQuery = encodeURIComponent(`"${extractedData?.company || ''}" ${evidence.title.replace(/^\[.*?\]\s*/, '')}`);
+                        const googleSearchUrl = `https://www.google.com/search?q=${searchQuery}`;
+                        
+                        return (
+                          <div key={i} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
+                            <p className="font-medium text-sm mb-2">{evidence.title}</p>
+                            <p className="text-sm text-muted-foreground mb-3">
+                              <span className="text-primary">→</span> {evidence.indication}
+                            </p>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs text-muted-foreground italic">
+                                📍 {evidence.link}
+                              </span>
+                              <a 
+                                href={googleSearchUrl}
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 transition-colors"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                Pesquisar
+                              </a>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </Card>
