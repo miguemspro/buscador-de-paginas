@@ -15,10 +15,13 @@ export async function extractLeadFromImage(base64Image: string): Promise<Extract
     throw new Error(data.error);
   }
 
-  return data.leadData;
+  // A edge function retorna { leadInfo: ... }
+  return data.leadInfo;
 }
 
 export async function generatePlaybook(leadData: ExtractedLeadData): Promise<GeneratedPlaybook> {
+  console.log('Enviando para generate-playbook:', leadData);
+  
   const { data, error } = await supabase.functions.invoke('generate-playbook', {
     body: { leadData },
   });

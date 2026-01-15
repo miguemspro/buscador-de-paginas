@@ -47,14 +47,20 @@ serve(async (req) => {
   }
 
   try {
-    const { leadData } = await req.json();
+    const body = await req.json();
+    const leadData = body.leadData;
+    
+    if (!leadData) {
+      console.error("leadData não recebido. Body:", JSON.stringify(body));
+      throw new Error("Dados do lead não fornecidos");
+    }
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY não configurada");
     }
 
-    console.log("Gerando playbook para:", leadData.name, "-", leadData.company);
+    console.log("Gerando playbook para:", leadData.name || "Lead", "-", leadData.company || "Empresa");
 
     const userPrompt = `DADOS DO LEAD:
 - Nome: ${leadData.name || 'Lead'}
