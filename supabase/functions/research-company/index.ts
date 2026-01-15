@@ -99,148 +99,88 @@ Retorne as informações usando a função return_research_data.`;
 
     console.log('Pesquisando informações para:', company, leadName);
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // GPT com web search via responses API
+    const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-5-2025-08-07',
-        max_completion_tokens: 3000,
-        messages: [
-          { role: 'system', content: RESEARCH_PROMPT },
-          { role: 'user', content: userPrompt }
-        ],
-        tools: [
-          {
-            type: 'web_search',
-            web_search: { enabled: true }
-          },
-          {
-            type: 'function',
-            function: {
-              name: 'return_research_data',
-              description: 'Retorna os dados pesquisados sobre a empresa e lead',
-              parameters: {
-                type: 'object',
-                properties: {
-                  evidences: {
-                    type: 'array',
-                    description: 'Lista de evidências encontradas (3-8 itens)',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        title: { 
-                          type: 'string', 
-                          description: 'Título da notícia/informação encontrada' 
-                        },
-                        indication: { 
-                          type: 'string', 
-                          description: 'O que essa informação indica para um SDR (interpretação)' 
-                        },
-                        link: { 
-                          type: 'string', 
-                          description: 'URL real e funcional da fonte' 
-                        },
-                        source: { 
-                          type: 'string', 
-                          description: 'Nome da fonte (LinkedIn, Google News, site corporativo, etc)' 
-                        },
-                        date: { 
-                          type: 'string', 
-                          description: 'Data aproximada da informação (ex: "Jan 2026", "2025")' 
-                        }
-                      },
-                      required: ['title', 'indication', 'link', 'source']
-                    }
-                  },
-                  leadProfile: {
-                    type: 'object',
-                    description: 'Informações do perfil do lead (se encontrado)',
-                    properties: {
-                      linkedinUrl: { 
-                        type: 'string', 
-                        description: 'URL do perfil LinkedIn do lead' 
-                      },
-                      background: { 
-                        type: 'string', 
-                        description: 'Resumo do histórico profissional' 
-                      },
-                      recentActivity: { 
-                        type: 'string', 
-                        description: 'Atividade recente no LinkedIn (posts, artigos)' 
-                      }
-                    }
-                  }
-                },
-                required: ['evidences', 'leadProfile'],
-                additionalProperties: false
-              }
-            }
-          }
-        ],
-        tool_choice: 'auto'
+        model: 'gpt-4o-search-preview',
+        tools: [{ type: 'web_search_preview' }],
+        input: `${RESEARCH_PROMPT}\n\n${userPrompt}\n\nRetorne os resultados em formato JSON com a seguinte estrutura:
+{
+  "evidences": [
+    {
+      "title": "Título da notícia/informação",
+      "indication": "O que isso indica para um SDR",
+      "link": "URL real da fonte",
+      "source": "Nome da fonte",
+      "date": "Data aproximada"
+    }
+  ],
+  "leadProfile": {
+    "linkedinUrl": "URL do LinkedIn se encontrado",
+    "background": "Histórico profissional",
+    "recentActivity": "Atividade recente"
+  }
+}`
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Erro na API OpenAI:', response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ 
-            evidences: [], 
-            leadProfile: {},
-            error: 'Rate limit exceeded' 
-          }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      console.error('Erro na API OpenAI responses:', response.status, errorText);
       
       return new Response(
-        JSON.stringify({ 
-          evidences: [], 
-          leadProfile: {},
-          error: `API error: ${response.status}` 
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ evidences: [], leadProfile: {} }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const result = await response.json();
-    console.log('Resposta OpenAI recebida');
+    console.log('Resposta OpenAI responses recebida');
 
-    // Processar resposta - pode ter múltiplos tool_calls
-    const toolCalls = result.choices?.[0]?.message?.tool_calls || [];
-    
+    // Extrair dados da resposta
     let researchData: ResearchResult = {
       evidences: [],
       leadProfile: {}
     };
 
-    for (const toolCall of toolCalls) {
-      if (toolCall.function?.name === 'return_research_data') {
-        try {
-          const parsed = JSON.parse(toolCall.function.arguments);
+    // A API responses retorna output_text ou output
+    const outputText = result.output_text || '';
+    
+    if (outputText) {
+      console.log('Processando output_text...');
+      // Tentar extrair JSON da resposta
+      try {
+        // Procurar por blocos JSON na resposta
+        const jsonMatch = outputText.match(/```json\s*([\s\S]*?)\s*```/) || 
+                          outputText.match(/\{[\s\S]*"evidences"[\s\S]*\}/);
+        
+        if (jsonMatch) {
+          const jsonStr = jsonMatch[1] || jsonMatch[0];
+          const parsed = JSON.parse(jsonStr);
           researchData = {
-            evidences: parsed.evidences || [],
+            evidences: (parsed.evidences || []).filter((e: Evidence) => e.title && e.link),
             leadProfile: parsed.leadProfile || {}
           };
-          break;
-        } catch (parseError) {
-          console.error('Erro ao parsear argumentos:', parseError);
         }
-      }
-    }
-
-    // Se não encontrou via tool_call, tentar extrair do content
-    if (researchData.evidences.length === 0) {
-      const content = result.choices?.[0]?.message?.content;
-      if (content) {
-        console.log('Tentando extrair dados do content...');
-        // Fallback: retornar vazio se não conseguir parsear
+      } catch (e) {
+        console.error('Erro ao parsear JSON:', e);
+        // Se falhar o parse, tentar extrair links mencionados no texto
+        const urlMatches = outputText.match(/https?:\/\/[^\s"<>]+/g) || [];
+        if (urlMatches.length > 0) {
+          // Criar evidências básicas dos URLs encontrados
+          researchData.evidences = urlMatches.slice(0, 5).map((url: string, i: number) => ({
+            title: `Fonte encontrada ${i + 1}`,
+            indication: 'Verificar manualmente o conteúdo',
+            link: url,
+            source: new URL(url).hostname,
+            date: 'Recente'
+          }));
+        }
       }
     }
 
