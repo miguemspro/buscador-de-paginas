@@ -179,7 +179,40 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY não configurada');
     }
 
-    // Buscar cases relevantes do banco de dados
+    // 1. Buscar evidências reais via OpenAI web search
+    console.log('Buscando evidências reais para:', leadData.company);
+    let realEvidences: { title: string; indication: string; link: string; source: string; date?: string }[] = [];
+    let leadProfile: { linkedinUrl?: string; background?: string; recentActivity?: string } = {};
+    
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const researchResponse = await fetch(`${supabaseUrl}/functions/v1/research-company`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          company: leadData.company,
+          leadName: leadData.name,
+          role: leadData.role,
+          industry: leadData.industry
+        })
+      });
+
+      if (researchResponse.ok) {
+        const researchData = await researchResponse.json();
+        realEvidences = researchData.evidences || [];
+        leadProfile = researchData.leadProfile || {};
+        console.log(`Evidências encontradas: ${realEvidences.length}`);
+      } else {
+        console.warn('Falha na pesquisa de evidências, continuando sem evidências reais');
+      }
+    } catch (researchError) {
+      console.warn('Erro ao buscar evidências:', researchError);
+      // Continua sem evidências reais
+    }
+
+    // 2. Buscar cases relevantes do banco de dados
     console.log('Buscando cases para indústria:', leadData.industry);
     const relevantCases = await findRelevantCasesFromDB(leadData.industry);
     console.log('Cases encontrados:', relevantCases.length);
@@ -187,6 +220,17 @@ serve(async (req) => {
     const casesText = relevantCases.length > 0 
       ? relevantCases.map(c => `- ${c.company} (${c.title}): ${c.result}`).join('\n')
       : 'Nenhum case específico encontrado para este segmento. Use cases genéricos de transformação SAP.';
+
+    // 3. Construir prompt enriquecido com evidências reais
+    const evidencesText = realEvidences.length > 0
+      ? realEvidences.map(e => `- ${e.title}: ${e.indication} (${e.source}, ${e.date || 'recente'})`).join('\n')
+      : 'Nenhuma evidência real encontrada via pesquisa.';
+
+    const leadProfileText = leadProfile.background || leadProfile.recentActivity
+      ? `PERFIL DO LEAD (via LinkedIn):
+- Background: ${leadProfile.background || 'Não encontrado'}
+- Atividade recente: ${leadProfile.recentActivity || 'Não encontrada'}`
+      : 'Perfil do lead não encontrado no LinkedIn.';
 
     const userPrompt = `Gere um PLAYBOOK CONSULTIVO COMPLETO para este lead:
 
@@ -201,14 +245,19 @@ DADOS DO LEAD (use APENAS estas informações):
 - Sinais Públicos: ${leadData.publicSignals || 'Não informados'}
 - Origem: ${leadData.leadSource || 'Salesforce'}
 
+EVIDÊNCIAS REAIS ENCONTRADAS VIA WEB SEARCH:
+${evidencesText}
+
+${leadProfileText}
+
 CASES DE SUCESSO REAIS DA META IT (use como referência para soluções):
 ${casesText}
 
-LEMBRETE CRÍTICO:
-- Evidências: SEMPRE array vazio []
-- Dores: APENAS com embasamento no contexto acima
-- Perfil: Baseado APENAS no cargo "${leadData.role || 'não informado'}"
-- Não invente nada que não esteja nos dados fornecidos
+INSTRUÇÕES ESPECIAIS:
+- Use as evidências reais encontradas para basear as dores e o contexto
+- Se há evidências reais, mencione-as no resumo executivo e no texto de abordagem
+- Baseie o perfil do lead nas informações do LinkedIn encontradas
+- NÃO invente evidências adicionais - use apenas as fornecidas acima
 
 Gere o playbook com as 6 seções especificadas.`;
 
@@ -369,10 +418,15 @@ Gere o playbook com as 6 seções especificadas.`;
 
     const playbook = JSON.parse(toolCall.function.arguments);
     
-    // Garantir que evidences é sempre array vazio
-    playbook.evidences = [];
+    // Usar evidências reais da pesquisa (se houver)
+    playbook.evidences = realEvidences;
     
-    console.log('Playbook gerado com sucesso');
+    // Adicionar perfil do lead se encontrado
+    if (leadProfile.linkedinUrl || leadProfile.background) {
+      playbook.leadProfile = leadProfile;
+    }
+    
+    console.log(`Playbook gerado com ${realEvidences.length} evidências reais`);
 
     return new Response(
       JSON.stringify({ playbook, relevantCases }),
