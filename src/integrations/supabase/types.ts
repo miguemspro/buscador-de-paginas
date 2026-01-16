@@ -32,6 +32,33 @@ export type Database = {
         }
         Relationships: []
       }
+      analytics_events: {
+        Row: {
+          created_at: string | null
+          event_type: string
+          id: string
+          lead_company: string | null
+          metadata: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_type: string
+          id?: string
+          lead_company?: string | null
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          lead_company?: string | null
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       citation_validations: {
         Row: {
           evidence_url: string
@@ -184,6 +211,60 @@ export type Database = {
           use_cases?: string[] | null
         }
         Relationships: []
+      }
+      playbook_feedback: {
+        Row: {
+          case_utilizado: string | null
+          comentarios: string | null
+          created_at: string | null
+          dores_confirmadas: string[] | null
+          id: string
+          meeting_agendado: boolean | null
+          meeting_data: string | null
+          playbook_id: string | null
+          resposta_lead: string | null
+          user_id: string | null
+        }
+        Insert: {
+          case_utilizado?: string | null
+          comentarios?: string | null
+          created_at?: string | null
+          dores_confirmadas?: string[] | null
+          id?: string
+          meeting_agendado?: boolean | null
+          meeting_data?: string | null
+          playbook_id?: string | null
+          resposta_lead?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          case_utilizado?: string | null
+          comentarios?: string | null
+          created_at?: string | null
+          dores_confirmadas?: string[] | null
+          id?: string
+          meeting_agendado?: boolean | null
+          meeting_data?: string | null
+          playbook_id?: string | null
+          resposta_lead?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "playbook_feedback_playbook_id_fkey"
+            columns: ["playbook_id"]
+            isOneToOne: false
+            referencedRelation: "playbook_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "playbook_feedback_playbook_id_fkey"
+            columns: ["playbook_id"]
+            isOneToOne: false
+            referencedRelation: "playbook_history_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       playbook_history: {
         Row: {

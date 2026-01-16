@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import {
   RotateCcw,
   User,
@@ -28,17 +29,22 @@ import {
   Server,
   Database,
   Award,
-  BarChart3
+  BarChart3,
+  FileDown,
+  ClipboardCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { ExportPDF } from './ExportPDF';
+import { FeedbackForm } from '@/components/Feedback/FeedbackForm';
 
 type SectionId = 'summary' | 'evidences' | 'pains' | 'solutions' | 'cases' | 'discovery' | 'approach';
 
 export default function PlaybookView() {
-  const { playbook, extractedData, reset } = usePlaybookStore();
+  const { playbook, extractedData, reset, playbookId } = usePlaybookStore();
   const [copiedScript, setCopiedScript] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>('summary');
+  const [showFeedback, setShowFeedback] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     summary: true,
     evidences: true,
@@ -162,6 +168,27 @@ ${playbook.approachScript?.fullText || ''}
             </Badge>
           </div>
           <div className="flex items-center gap-2">
+            <ExportPDF 
+              playbook={playbook} 
+              leadCompany={extractedData?.company || 'Lead'} 
+              leadName={extractedData?.name}
+            />
+            <Dialog open={showFeedback} onOpenChange={setShowFeedback}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <ClipboardCheck className="h-4 w-4" />
+                  Feedback
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="p-0 border-0 bg-transparent shadow-none max-w-lg">
+                <FeedbackForm
+                  playbookId={playbookId || ''}
+                  leadCompany={extractedData?.company || ''}
+                  pains={playbook.probablePains || []}
+                  onClose={() => setShowFeedback(false)}
+                />
+              </DialogContent>
+            </Dialog>
             <Button variant="outline" size="sm" onClick={handleCopyAll} className="gap-2">
               <Copy className="h-4 w-4" />
               Copiar Tudo
