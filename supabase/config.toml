@@ -18,3 +18,9 @@ verify_jwt = false
 
 [functions.research-company]
 verify_jwt = false
+
+[functions.admin-cases]
+verify_jwt = false
+
+[functions.admin-solutions]
+verify_jwt = false

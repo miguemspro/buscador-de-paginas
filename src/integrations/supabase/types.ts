@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_users: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+        }
+        Relationships: []
+      }
       citation_validations: {
         Row: {
           evidence_url: string
@@ -47,42 +65,123 @@ export type Database = {
       meta_cases: {
         Row: {
           case_url: string | null
+          challenge: string | null
           company_name: string
+          company_size: string | null
+          country: string | null
           created_at: string
           description: string
           id: string
           industry: string
           industry_keywords: string[]
+          is_active: boolean | null
+          key_result: string | null
+          metrics: Json | null
+          product_sold: string | null
+          project_date: string | null
+          project_type: string | null
           results: string[]
+          sap_modules: string[] | null
           sap_solutions: string[]
+          solution: string | null
           title: string
           updated_at: string
         }
         Insert: {
           case_url?: string | null
+          challenge?: string | null
           company_name: string
+          company_size?: string | null
+          country?: string | null
           created_at?: string
           description: string
           id?: string
           industry: string
           industry_keywords?: string[]
+          is_active?: boolean | null
+          key_result?: string | null
+          metrics?: Json | null
+          product_sold?: string | null
+          project_date?: string | null
+          project_type?: string | null
           results?: string[]
+          sap_modules?: string[] | null
           sap_solutions?: string[]
+          solution?: string | null
           title: string
           updated_at?: string
         }
         Update: {
           case_url?: string | null
+          challenge?: string | null
           company_name?: string
+          company_size?: string | null
+          country?: string | null
           created_at?: string
           description?: string
           id?: string
           industry?: string
           industry_keywords?: string[]
+          is_active?: boolean | null
+          key_result?: string | null
+          metrics?: Json | null
+          product_sold?: string | null
+          project_date?: string | null
+          project_type?: string | null
           results?: string[]
+          sap_modules?: string[] | null
           sap_solutions?: string[]
+          solution?: string | null
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      meta_solutions: {
+        Row: {
+          benefits: string[] | null
+          category: string
+          created_at: string | null
+          description: string
+          expected_result: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          related_pains: string[] | null
+          sap_modules: string[] | null
+          target_roles: string[] | null
+          updated_at: string | null
+          use_cases: string[] | null
+        }
+        Insert: {
+          benefits?: string[] | null
+          category: string
+          created_at?: string | null
+          description: string
+          expected_result?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          related_pains?: string[] | null
+          sap_modules?: string[] | null
+          target_roles?: string[] | null
+          updated_at?: string | null
+          use_cases?: string[] | null
+        }
+        Update: {
+          benefits?: string[] | null
+          category?: string
+          created_at?: string | null
+          description?: string
+          expected_result?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          related_pains?: string[] | null
+          sap_modules?: string[] | null
+          target_roles?: string[] | null
+          updated_at?: string | null
+          use_cases?: string[] | null
         }
         Relationships: []
       }
