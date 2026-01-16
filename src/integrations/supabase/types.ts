@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      citation_validations: {
+        Row: {
+          evidence_url: string
+          http_status: number | null
+          id: string
+          is_valid: boolean | null
+          playbook_id: string | null
+          validated_at: string
+          validation_error: string | null
+        }
+        Insert: {
+          evidence_url: string
+          http_status?: number | null
+          id?: string
+          is_valid?: boolean | null
+          playbook_id?: string | null
+          validated_at?: string
+          validation_error?: string | null
+        }
+        Update: {
+          evidence_url?: string
+          http_status?: number | null
+          id?: string
+          is_valid?: boolean | null
+          playbook_id?: string | null
+          validated_at?: string
+          validation_error?: string | null
+        }
+        Relationships: []
+      }
       meta_cases: {
         Row: {
           case_url: string | null
@@ -53,6 +83,90 @@ export type Database = {
           sap_solutions?: string[]
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      playbook_history: {
+        Row: {
+          cache_hit: boolean | null
+          created_at: string
+          evidences_count: number | null
+          extracted_data: Json | null
+          generation_time_ms: number | null
+          id: string
+          lead_company: string
+          lead_email: string | null
+          lead_industry: string | null
+          lead_name: string | null
+          lead_role: string | null
+          playbook_data: Json
+          sap_status: string | null
+          validated_evidences_count: number | null
+        }
+        Insert: {
+          cache_hit?: boolean | null
+          created_at?: string
+          evidences_count?: number | null
+          extracted_data?: Json | null
+          generation_time_ms?: number | null
+          id?: string
+          lead_company: string
+          lead_email?: string | null
+          lead_industry?: string | null
+          lead_name?: string | null
+          lead_role?: string | null
+          playbook_data: Json
+          sap_status?: string | null
+          validated_evidences_count?: number | null
+        }
+        Update: {
+          cache_hit?: boolean | null
+          created_at?: string
+          evidences_count?: number | null
+          extracted_data?: Json | null
+          generation_time_ms?: number | null
+          id?: string
+          lead_company?: string
+          lead_email?: string | null
+          lead_industry?: string | null
+          lead_name?: string | null
+          lead_role?: string | null
+          playbook_data?: Json
+          sap_status?: string | null
+          validated_evidences_count?: number | null
+        }
+        Relationships: []
+      }
+      research_cache: {
+        Row: {
+          cache_key: string
+          cache_type: string
+          created_at: string
+          expires_at: string
+          hit_count: number | null
+          id: string
+          last_hit_at: string | null
+          result_data: Json
+        }
+        Insert: {
+          cache_key: string
+          cache_type: string
+          created_at?: string
+          expires_at: string
+          hit_count?: number | null
+          id?: string
+          last_hit_at?: string | null
+          result_data: Json
+        }
+        Update: {
+          cache_key?: string
+          cache_type?: string
+          created_at?: string
+          expires_at?: string
+          hit_count?: number | null
+          id?: string
+          last_hit_at?: string | null
+          result_data?: Json
         }
         Relationships: []
       }
