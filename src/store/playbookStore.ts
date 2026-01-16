@@ -21,6 +21,7 @@ interface PlaybookState {
   imagePreview: string | null;
   extractedData: ExtractedLeadData | null;
   playbook: GeneratedPlaybook | null;
+  playbookId: string | null;
   
   // Métricas de pesquisa (Fase 1)
   evidencesFound: number;
@@ -37,7 +38,7 @@ interface PlaybookState {
   setResearchPhase: (phase: ResearchPhase) => void;
   setImagePreview: (preview: string | null) => void;
   setExtractedData: (data: ExtractedLeadData | null) => void;
-  setPlaybook: (playbook: GeneratedPlaybook | null) => void;
+  setPlaybook: (playbook: GeneratedPlaybook | null, id?: string) => void;
   setLoading: (loading: boolean, message?: string) => void;
   setError: (error: string | null) => void;
   setActiveCardIndex: (index: number) => void;
@@ -51,6 +52,7 @@ const initialState = {
   imagePreview: null,
   extractedData: null,
   playbook: null,
+  playbookId: null,
   evidencesFound: 0,
   cacheHit: false,
   isLoading: false,
@@ -70,7 +72,7 @@ export const usePlaybookStore = create<PlaybookState>((set) => ({
   
   setExtractedData: (data) => set({ extractedData: data }),
   
-  setPlaybook: (playbook) => set({ playbook }),
+  setPlaybook: (playbook, id) => set({ playbook, playbookId: id || null }),
   
   setLoading: (loading, message = '') => set({ 
     isLoading: loading, 
