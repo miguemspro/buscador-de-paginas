@@ -26,12 +26,14 @@ import {
   Users,
   Settings,
   Server,
-  Database
+  Database,
+  Award,
+  BarChart3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-type SectionId = 'summary' | 'evidences' | 'pains' | 'solutions' | 'discovery' | 'approach';
+type SectionId = 'summary' | 'evidences' | 'pains' | 'solutions' | 'cases' | 'discovery' | 'approach';
 
 export default function PlaybookView() {
   const { playbook, extractedData, reset } = usePlaybookStore();
@@ -42,6 +44,7 @@ export default function PlaybookView() {
     evidences: true,
     pains: true,
     solutions: true,
+    cases: true,
     discovery: true,
     approach: true,
   });
@@ -141,6 +144,7 @@ ${playbook.approachScript?.fullText || ''}
     { id: 'evidences' as SectionId, label: 'Evidências', icon: ExternalLink },
     { id: 'pains' as SectionId, label: 'Dores', icon: AlertTriangle },
     { id: 'solutions' as SectionId, label: 'Soluções', icon: Sparkles },
+    { id: 'cases' as SectionId, label: 'Cases', icon: Award },
     { id: 'discovery' as SectionId, label: 'Discovery', icon: HelpCircle },
     { id: 'approach' as SectionId, label: 'Abordagem', icon: MessageSquare },
   ];
@@ -409,8 +413,23 @@ ${playbook.approachScript?.fullText || ''}
                       <span className="flex-shrink-0 w-6 h-6 rounded-full bg-destructive/10 text-destructive text-xs font-bold flex items-center justify-center">
                         {i + 1}
                       </span>
-                      <div>
-                        <p className="font-medium text-sm">{pain.pain}</p>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-sm">{pain.pain}</p>
+                          {pain.confidence && (
+                            <Badge 
+                              variant="outline" 
+                              className={cn(
+                                "text-xs",
+                                pain.confidence === 'alta' && "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300",
+                                pain.confidence === 'media' && "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300",
+                                pain.confidence === 'baixa' && "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-900 dark:text-gray-400"
+                              )}
+                            >
+                              {pain.confidence}
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground mt-1">
                           Motivo: {pain.reason}
                         </p>
@@ -452,7 +471,49 @@ ${playbook.approachScript?.fullText || ''}
               )}
             </Card>
 
-            {/* 5. PERGUNTAS DE DISCOVERY */}
+            {/* 5. CASES RELEVANTES */}
+            {playbook.relevantCases && playbook.relevantCases.length > 0 && (
+              <Card className="p-6" id="cases">
+                <button 
+                  onClick={() => toggleSection('cases')}
+                  className="flex items-center justify-between w-full text-left mb-4"
+                >
+                  <h2 className="font-semibold text-lg flex items-center gap-2">
+                    <Award className="h-5 w-5 text-amber-500" />
+                    5. Cases Relevantes
+                    <Badge variant="secondary" className="ml-2">{playbook.relevantCases.length}</Badge>
+                  </h2>
+                  {expandedSections.cases ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                </button>
+                
+                {expandedSections.cases && (
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {playbook.relevantCases.map((caseItem, i) => (
+                      <div key={i} className="border rounded-lg overflow-hidden bg-gradient-to-br from-amber-50/50 to-orange-50/50 dark:from-amber-950/20 dark:to-orange-950/20">
+                        <div className="bg-amber-100/80 dark:bg-amber-900/40 px-4 py-2 border-b border-amber-200 dark:border-amber-800 flex items-center justify-between">
+                          <p className="font-semibold text-sm">{caseItem.company}</p>
+                          {caseItem.score && (
+                            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
+                              {(caseItem.score * 100).toFixed(0)}% match
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="p-4 space-y-2">
+                          <p className="text-sm font-medium">{caseItem.title}</p>
+                          <p className="text-xs text-muted-foreground">{caseItem.result}</p>
+                          <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 pt-2 border-t border-amber-100 dark:border-amber-900">
+                            <BarChart3 className="h-3 w-3" />
+                            <span>{caseItem.relevance}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            )}
+
+            {/* 6. PERGUNTAS DE DISCOVERY */}
             <Card className="p-6" id="discovery">
               <button 
                 onClick={() => toggleSection('discovery')}
@@ -460,7 +521,7 @@ ${playbook.approachScript?.fullText || ''}
               >
                 <h2 className="font-semibold text-lg flex items-center gap-2">
                   <HelpCircle className="h-5 w-5 text-amber-500" />
-                  5. Perguntas de Discovery
+                  6. Perguntas de Discovery
                   <Badge variant="secondary" className="ml-2">12</Badge>
                 </h2>
                 {expandedSections.discovery ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
@@ -520,9 +581,9 @@ ${playbook.approachScript?.fullText || ''}
                   onClick={() => toggleSection('approach')}
                   className="flex items-center gap-2 text-left"
                 >
-                  <h2 className="font-semibold text-lg flex items-center gap-2">
+                <h2 className="font-semibold text-lg flex items-center gap-2">
                     <MessageSquare className="h-5 w-5 text-green-500" />
-                    6. Texto de Abordagem
+                    7. Texto de Abordagem
                   </h2>
                 </button>
                 <Button 

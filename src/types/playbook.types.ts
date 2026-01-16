@@ -51,6 +51,7 @@ export interface Evidence {
 export interface ProbablePain {
   pain: string;                // A dor em si
   reason: string;              // Motivo plausível
+  confidence?: 'alta' | 'media' | 'baixa'; // Nível de confiança
 }
 
 // ============================================
@@ -83,7 +84,30 @@ export interface ApproachScript {
 }
 
 // ============================================
-// PLAYBOOK COMPLETO - 6 seções
+// 7) CASES RELEVANTES - 1-3 cases ranqueados
+// ============================================
+export interface RelevantCase {
+  company: string;             // Nome da empresa do case
+  title: string;               // Título do projeto
+  result: string;              // Resultado chave
+  relevance: string;           // Motivo da relevância
+  score?: number;              // Score de similaridade
+}
+
+// ============================================
+// 8) METADADOS DO PLAYBOOK
+// ============================================
+export interface PlaybookMetadata {
+  roleLevel: number;           // Nível do cargo (1-5)
+  roleFocus: string;           // Foco do cargo
+  totalPains: number;          // Total de dores derivadas
+  totalCases: number;          // Total de cases ranqueados
+  totalSolutions: number;      // Total de soluções mapeadas
+  evidencesFound: number;      // Total de evidências encontradas
+}
+
+// ============================================
+// PLAYBOOK COMPLETO - 6 seções + extras
 // ============================================
 export interface GeneratedPlaybook {
   executiveSummary: ExecutiveSummary;
@@ -92,4 +116,6 @@ export interface GeneratedPlaybook {
   metaSolutions: MetaSolution[];     // 10 itens
   discoveryQuestions: DiscoveryQuestions;
   approachScript: ApproachScript;
+  relevantCases?: RelevantCase[];    // 1-3 cases ranqueados
+  metadata?: PlaybookMetadata;       // Metadados da geração
 }
