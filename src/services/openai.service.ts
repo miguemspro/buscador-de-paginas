@@ -1,18 +1,7 @@
-import OpenAI from 'openai';
 import type { ConversationContext } from '../types/node.types';
 import metaItConfig from '../data/meta_it_config.json';
 import companySegments from '../data/company_segments.json';
-
-const API_KEY = import.meta.env.VITE_OPENAI_API_KEY || '';
-
-if (!API_KEY) {
-  console.warn('⚠️ VITE_OPENAI_API_KEY não configurada. A IA não funcionará.');
-}
-
-const openai = new OpenAI({
-  apiKey: API_KEY,
-  dangerouslyAllowBrowser: true,
-});
+import { supabase } from '@/integrations/supabase/client';
 
 interface AISuggestion {
   suggestion: string;
@@ -33,108 +22,41 @@ export class OpenAIService {
     return clientes;
   }
 
-  private buildPrompt(context: ConversationContext, nodeTitle: string, customPrompt?: string): string {
-    const { prospectInfo, conversationHistory, currentPhase, templateId } = context;
-
-    const clientesExemplo = prospectInfo.industry
-      ? this.getClientesDoSegmento(prospectInfo.industry)
-      : [];
-
-    const clientesTexto = clientesExemplo.length > 0
-      ? `\nExemplos de clientes atendidos no setor ${prospectInfo.industry}: ${clientesExemplo.join(', ')}`
-      : '';
-
-    const historicoTexto = conversationHistory.length > 0
-      ? conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n')
-      : 'Nenhuma conversa ainda';
-
-    return `Você é um assistente especializado em vendas consultivas para SDRs de TI da Meta IT.
-
-INFORMAÇÕES DA META IT:
-- Nome: ${metaItConfig.empresa.nome}
-- Anos de mercado: ${metaItConfig.empresa.anos_mercado}
-- Descrição: ${metaItConfig.empresa.descricao}
-
-PRODUTOS/SERVIÇOS:
-${metaItConfig.produtos.map(p => `- ${p.nome}: ${p.descricao}`).join('\n')}
-
-DIFERENCIAIS:
-${metaItConfig.diferenciais.map((d, i) => `${i + 1}. ${d}`).join('\n')}
-${clientesTexto}
-
-CONTEXTO DA CONVERSA:
-- Metodologia ativa: ${templateId}
-- Fase atual: ${currentPhase} - ${nodeTitle}
-- Empresa prospect: ${prospectInfo.company || 'não informada'}
-- Setor: ${prospectInfo.industry || 'não informado'}
-- Cargo do contato: ${prospectInfo.role || 'não informado'}
-
-HISTÓRICO DA CONVERSA:
-${historicoTexto}
-
-RESTRIÇÕES IMPORTANTES:
-1. NÃO repita perguntas ou informações já mencionadas no histórico
-2. NÃO alucine informações que não foram mencionadas
-3. NÃO seja redundante ou prolixo
-4. BASE-SE exclusivamente no histórico anterior e informações da Meta IT
-5. Seja natural, consultivo e conversacional (não robotizado)
-6. Use o nome do prospect se disponível
-7. Se tiver clientes do mesmo setor, mencione-os naturalmente
-8. Personalize para o setor/indústria do prospect
-
-TAREFA:
-Gere uma sugestão de texto para a fase "${currentPhase}" (${nodeTitle}) que seja:
-- Contextualizada com a conversa anterior
-- Específica para o setor ${prospectInfo.industry || 'TI'}
-- Alinhada com a metodologia ${templateId}
-- Natural e conversacional
-- Direta e sem rodeios
-${customPrompt ? `\n\nINSTRUÇÃO ADICIONAL DO USUÁRIO:\n${customPrompt}` : ''}
-
-FORMATO DE RESPOSTA (JSON):
-{
-  "suggestion": "texto principal da sugestão aqui",
-  "reasoning": "breve explicação (1-2 frases) do porquê dessa sugestão",
-  "alternatives": ["alternativa 1", "alternativa 2"]
-}
-
-IMPORTANTE: Responda APENAS com o JSON, sem texto adicional antes ou depois.`;
-  }
-
   async generateSuggestions(
     context: ConversationContext,
     nodeTitle: string,
     customPrompt?: string
   ): Promise<AISuggestion> {
     try {
-      const prompt = this.buildPrompt(context, nodeTitle, customPrompt);
+      const { prospectInfo, conversationHistory, currentPhase, templateId } = context;
 
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: 'Você é um assistente especializado em vendas consultivas B2B para SDRs de TI. Responda sempre em JSON válido.',
+      const clientesExemplo = prospectInfo.industry
+        ? this.getClientesDoSegmento(prospectInfo.industry)
+        : [];
+
+      const { data, error } = await supabase.functions.invoke('ai-suggestions', {
+        body: {
+          prospectInfo,
+          conversationHistory,
+          currentPhase,
+          templateId,
+          nodeTitle,
+          customPrompt,
+          metaItConfig: {
+            empresa: metaItConfig.empresa,
+            produtos: metaItConfig.produtos,
+            diferenciais: metaItConfig.diferenciais,
           },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 800,
-        response_format: { type: 'json_object' },
+          clientesExemplo,
+        },
       });
 
-      const responseContent = completion.choices[0]?.message?.content;
-
-      if (!responseContent) {
-        throw new Error('Resposta vazia da API');
+      if (error) {
+        console.error('Erro ao chamar ai-suggestions:', error);
+        throw error;
       }
 
-      const parsed = JSON.parse(responseContent) as AISuggestion;
-
-      return parsed;
+      return data as AISuggestion;
 
     } catch (error) {
       console.error('Erro ao gerar sugestões:', error);
@@ -149,23 +71,29 @@ IMPORTANTE: Responda APENAS com o JSON, sem texto adicional antes ou depois.`;
 
   async generateQuickSuggestion(phase: string, industry?: string): Promise<string> {
     try {
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: 'Você é um assistente de vendas consultivas. Seja breve e direto.',
+      const { data, error } = await supabase.functions.invoke('ai-suggestions', {
+        body: {
+          prospectInfo: { company: '', industry },
+          conversationHistory: [],
+          currentPhase: phase,
+          templateId: 'quick',
+          nodeTitle: phase,
+          customPrompt: `Gere uma sugestão curta para a fase "${phase}" de uma prospecção ${industry ? `no setor ${industry}` : 'de TI'}.`,
+          metaItConfig: {
+            empresa: metaItConfig.empresa,
+            produtos: metaItConfig.produtos,
+            diferenciais: metaItConfig.diferenciais,
           },
-          {
-            role: 'user',
-            content: `Gere uma sugestão curta para a fase "${phase}" de uma prospecção ${industry ? `no setor ${industry}` : 'de TI'}.`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 200,
+          clientesExemplo: [],
+        },
       });
 
-      return completion.choices[0]?.message?.content || 'Sugestão não disponível';
+      if (error) {
+        console.error('Erro ao gerar sugestão rápida:', error);
+        return 'Erro ao gerar sugestão';
+      }
+
+      return data?.suggestion || 'Sugestão não disponível';
 
     } catch (error) {
       console.error('Erro ao gerar sugestão rápida:', error);
