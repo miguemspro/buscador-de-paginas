@@ -172,7 +172,45 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      playbook_history_public: {
+        Row: {
+          cache_hit: boolean | null
+          created_at: string | null
+          evidences_count: number | null
+          generation_time_ms: number | null
+          id: string | null
+          lead_company: string | null
+          lead_industry: string | null
+          playbook_data: Json | null
+          sap_status: string | null
+          validated_evidences_count: number | null
+        }
+        Insert: {
+          cache_hit?: boolean | null
+          created_at?: string | null
+          evidences_count?: number | null
+          generation_time_ms?: number | null
+          id?: string | null
+          lead_company?: string | null
+          lead_industry?: string | null
+          playbook_data?: Json | null
+          sap_status?: string | null
+          validated_evidences_count?: number | null
+        }
+        Update: {
+          cache_hit?: boolean | null
+          created_at?: string | null
+          evidences_count?: number | null
+          generation_time_ms?: number | null
+          id?: string | null
+          lead_company?: string | null
+          lead_industry?: string | null
+          playbook_data?: Json | null
+          sap_status?: string | null
+          validated_evidences_count?: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
