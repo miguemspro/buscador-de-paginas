@@ -99,17 +99,25 @@ Retorne as informações usando a função return_research_data.`;
 
     console.log('Pesquisando informações para:', company, leadName);
 
-    // GPT com web search via responses API
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    // GPT com Chat Completions API
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-search-preview',
-        tools: [{ type: 'web_search_preview' }],
-        input: `${RESEARCH_PROMPT}\n\n${userPrompt}\n\nRetorne os resultados em formato JSON com a seguinte estrutura:
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: RESEARCH_PROMPT
+          },
+          {
+            role: 'user',
+            content: `${userPrompt}
+
+Retorne APENAS um JSON válido com a seguinte estrutura:
 {
   "evidences": [
     {
@@ -121,18 +129,28 @@ Retorne as informações usando a função return_research_data.`;
     }
   ],
   "leadProfile": {
-    "linkedinUrl": "URL do LinkedIn se encontrado",
-    "background": "Histórico profissional",
-    "recentActivity": "Atividade recente"
+    "linkedinUrl": null,
+    "background": null,
+    "recentActivity": null
   }
+}
+
+Se não encontrar informações verificáveis, retorne:
+{
+  "evidences": [],
+  "leadProfile": {}
 }`
+          }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.3
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Erro na API OpenAI responses:', response.status, errorText);
-      
+      console.error('Erro na API OpenAI:', response.status, errorText);
+
       return new Response(
         JSON.stringify({ evidences: [], leadProfile: {} }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -140,7 +158,7 @@ Retorne as informações usando a função return_research_data.`;
     }
 
     const result = await response.json();
-    console.log('Resposta OpenAI responses recebida');
+    console.log('Resposta OpenAI recebida');
 
     // Extrair dados da resposta
     let researchData: ResearchResult = {
@@ -148,40 +166,16 @@ Retorne as informações usando a função return_research_data.`;
       leadProfile: {}
     };
 
-    // A API responses retorna output_text ou output
-    const outputText = result.output_text || '';
-    
-    if (outputText) {
-      console.log('Processando output_text...');
-      // Tentar extrair JSON da resposta
-      try {
-        // Procurar por blocos JSON na resposta
-        const jsonMatch = outputText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                          outputText.match(/\{[\s\S]*"evidences"[\s\S]*\}/);
-        
-        if (jsonMatch) {
-          const jsonStr = jsonMatch[1] || jsonMatch[0];
-          const parsed = JSON.parse(jsonStr);
-          researchData = {
-            evidences: (parsed.evidences || []).filter((e: Evidence) => e.title && e.link),
-            leadProfile: parsed.leadProfile || {}
-          };
-        }
-      } catch (e) {
-        console.error('Erro ao parsear JSON:', e);
-        // Se falhar o parse, tentar extrair links mencionados no texto
-        const urlMatches = outputText.match(/https?:\/\/[^\s"<>]+/g) || [];
-        if (urlMatches.length > 0) {
-          // Criar evidências básicas dos URLs encontrados
-          researchData.evidences = urlMatches.slice(0, 5).map((url: string, i: number) => ({
-            title: `Fonte encontrada ${i + 1}`,
-            indication: 'Verificar manualmente o conteúdo',
-            link: url,
-            source: new URL(url).hostname,
-            date: 'Recente'
-          }));
-        }
-      }
+    const content = result.choices?.[0]?.message?.content || '{}';
+
+    try {
+      const parsed = JSON.parse(content);
+      researchData = {
+        evidences: (parsed.evidences || []).filter((e: Evidence) => e.title && e.link),
+        leadProfile: parsed.leadProfile || {}
+      };
+    } catch (e) {
+      console.error('Erro ao parsear JSON:', e);
     }
 
     console.log(`Pesquisa concluída: ${researchData.evidences.length} evidências encontradas`);

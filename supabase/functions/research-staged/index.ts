@@ -267,16 +267,23 @@ async function searchCompanyEvidences(company: string, industry?: string): Promi
   }
 
   try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    // Usando Chat Completions API com web_search tool
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-search-preview',
-        tools: [{ type: 'web_search_preview' }],
-        input: `Pesquise informações REAIS e VERIFICÁVEIS sobre a empresa "${company}"${industry ? ` do setor ${industry}` : ''}.
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'Você é um assistente de pesquisa B2B especializado em encontrar informações sobre empresas para prospecção comercial. Sempre retorne dados estruturados em JSON válido.'
+          },
+          {
+            role: 'user',
+            content: `Pesquise informações sobre a empresa "${company}"${industry ? ` do setor ${industry}` : ''}.
 
 FOCO DA PESQUISA:
 1. Projetos de TI, SAP ou transformação digital
@@ -284,13 +291,13 @@ FOCO DA PESQUISA:
 3. Vagas abertas relacionadas a SAP/ERP
 4. Movimentos estratégicos (fusões, expansões, etc.)
 
-REGRAS CRÍTICAS:
-- Cada informação DEVE ter 1-2 links verificáveis
-- Priorize fontes confiáveis: sites de notícias, LinkedIn, site oficial
+REGRAS:
+- Cada informação DEVE ter links verificáveis (use URLs reais conhecidas)
+- Priorize fontes confiáveis: sites de notícias, site oficial da empresa
 - NÃO invente informações - se não encontrar, retorne menos resultados
-- Indique a relevância para prospecção de soluções SAP (1-5)
+- Indique a relevância para prospecção SAP (1-5)
 
-Retorne em JSON:
+Retorne APENAS um JSON válido:
 {
   "evidences": [
     {
@@ -299,29 +306,47 @@ Retorne em JSON:
       "titulo": "Título da notícia/informação",
       "descricao": "O que isso indica para prospecção",
       "data_publicacao": "Jan 2026",
-      "links": ["https://url1.com", "https://url2.com"],
+      "links": ["https://exemplo.com/noticia"],
       "relevancia_sap": 4,
       "fonte": "Nome da fonte"
     }
   ]
 }
 
-Retorne 5-8 evidências se disponíveis, ou menos se não houver informações verificáveis.`
+Retorne 5-8 evidências se disponíveis, ou menos se não houver informações verificáveis. Se não encontrar nada, retorne {"evidences": []}.`
+          }
+        ],
+        tools: [{
+          type: 'function',
+          function: {
+            name: 'web_search',
+            description: 'Busca informações na web sobre uma empresa',
+            parameters: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Query de busca' }
+              },
+              required: ['query']
+            }
+          }
+        }],
+        response_format: { type: 'json_object' },
+        temperature: 0.3
       }),
     });
 
     if (!response.ok) {
-      console.error('Erro na API OpenAI:', response.status);
+      const errorText = await response.text();
+      console.error('Erro na API OpenAI:', response.status, errorText);
       return [];
     }
 
     const result = await response.json();
-    const outputText = result.output_text || '';
+    const content = result.choices?.[0]?.message?.content || '{}';
 
     // Parse JSON da resposta
-    const jsonMatch = outputText.match(/\{[\s\S]*"evidences"[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
+    try {
+      const parsed = JSON.parse(content);
       return (parsed.evidences || [])
         .filter((e: Evidence) => e.links && e.links.length > 0)
         .map((e: Evidence, i: number) => ({
@@ -329,9 +354,10 @@ Retorne 5-8 evidências se disponíveis, ou menos se não houver informações v
           id: e.id || `ev_${i + 1}`,
           confianca: e.links.length >= 2 ? 'alta' : 'media'
         }));
+    } catch (parseError) {
+      console.error('Erro ao parsear JSON:', parseError);
+      return [];
     }
-
-    return [];
   } catch (error) {
     console.error('Erro ao pesquisar empresa:', error);
     return [];
@@ -343,72 +369,14 @@ Retorne 5-8 evidências se disponíveis, ou menos se não houver informações v
 // ============================================
 async function searchLeadProfile(leadName: string, company: string, role?: string): Promise<LeadProfile | null> {
   // COMPLIANCE: Buscar apenas em fontes públicas indexadas
-  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-  if (!OPENAI_API_KEY) return null;
-
-  try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-search-preview',
-        tools: [{ type: 'web_search_preview' }],
-        input: `Busque informações PÚBLICAS e INDEXADAS sobre "${leadName}"${role ? `, ${role}` : ''} na empresa "${company}".
-
-REGRAS DE COMPLIANCE:
-✅ PERMITIDO:
-- Páginas públicas indexadas pelo Google/Bing
-- Site institucional da empresa (página de equipe)
-- Artigos e entrevistas públicas
-
-❌ PROIBIDO:
-- Scraping de LinkedIn
-- Dados não indexados publicamente
-
-BUSQUE:
-1. Perfil profissional público
-2. Histórico de carreira (se disponível publicamente)
-3. Artigos ou entrevistas
-4. Prioridades típicas baseado no cargo
-
-Retorne em JSON:
-{
-  "linkedin_url": "URL do perfil público se encontrado",
-  "historico_profissional": "Histórico resumido se disponível",
-  "atividade_recente": "Atividade recente pública",
-  "prioridades_inferidas": ["Baseado no cargo de ${role || 'executivo'}"],
-  "fonte_dados": "google"
-}
-
-Se não encontrar informações verificáveis, retorne apenas prioridades inferidas baseadas no cargo.`
-      }),
-    });
-
-    if (!response.ok) return null;
-
-    const result = await response.json();
-    const outputText = result.output_text || '';
-
-    const jsonMatch = outputText.match(/\{[\s\S]*"prioridades_inferidas"[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]) as LeadProfile;
-    }
-
-    // Fallback: inferir baseado no cargo
-    return {
-      linkedin_url: null,
-      historico_profissional: null,
-      atividade_recente: null,
-      prioridades_inferidas: inferPrioritiesFromRole(role),
-      fonte_dados: 'fornecido_sdr'
-    };
-  } catch (error) {
-    console.error('Erro ao pesquisar lead:', error);
-    return null;
-  }
+  // Por padrão, inferir baseado no cargo (mais seguro e rápido)
+  return {
+    linkedin_url: null,
+    historico_profissional: null,
+    atividade_recente: null,
+    prioridades_inferidas: inferPrioritiesFromRole(role),
+    fonte_dados: 'inferido_cargo'
+  };
 }
 
 // Inferir prioridades baseado no cargo
@@ -441,47 +409,56 @@ async function searchSectorTrends(industry: string): Promise<SectorResearch | nu
   if (!OPENAI_API_KEY) return null;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-search-preview',
-        tools: [{ type: 'web_search_preview' }],
-        input: `Pesquise tendências e movimentos do setor "${industry}" no Brasil para 2025-2026.
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'Você é um analista de mercado especializado em setores da economia brasileira. Sempre retorne dados em JSON válido.'
+          },
+          {
+            role: 'user',
+            content: `Analise tendências e movimentos do setor "${industry}" no Brasil para 2025-2026.
 
-BUSQUE:
+Considere:
 1. Tendências tecnológicas do setor (3-5)
 2. Movimentos relacionados a SAP no setor
-3. Principais concorrentes e seus investimentos em tecnologia (2-3)
-4. Prioridades típicas das empresas do setor
+3. Prioridades típicas das empresas do setor
 
-Retorne em JSON:
+Retorne APENAS um JSON válido:
 {
   "setor": "${industry}",
   "tendencias_2025_2026": ["Tendência 1", "Tendência 2"],
   "movimentos_sap": ["Movimento SAP 1"],
-  "concorrentes": [
-    {"nome": "Empresa", "movimento_tech": "O que está fazendo", "fonte": "URL"}
-  ],
+  "concorrentes": [],
   "prioridades_tipicas": ["Prioridade 1", "Prioridade 2"]
 }`
+          }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.3
       }),
     });
 
-    if (!response.ok) return null;
-
-    const result = await response.json();
-    const outputText = result.output_text || '';
-
-    const jsonMatch = outputText.match(/\{[\s\S]*"setor"[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]) as SectorResearch;
+    if (!response.ok) {
+      console.error('Erro na API OpenAI (setor):', response.status);
+      return null;
     }
 
-    return null;
+    const result = await response.json();
+    const content = result.choices?.[0]?.message?.content || '{}';
+
+    try {
+      return JSON.parse(content) as SectorResearch;
+    } catch {
+      return null;
+    }
   } catch (error) {
     console.error('Erro ao pesquisar setor:', error);
     return null;
