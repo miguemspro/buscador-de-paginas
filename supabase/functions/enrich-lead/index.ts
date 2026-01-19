@@ -5,37 +5,69 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Dados retornados pelo Apify LinkedIn Profile Scraper
+// Dados retornados pelo Apify LinkedIn Profile Scraper (dev_fusion)
+// Baseado na documentação: https://apify.com/dev_fusion/linkedin-profile-scraper
 interface LinkedInProfile {
+  // Main profile data
+  linkedinUrl?: string;
+  linkedinPublicUrl?: string;
   firstName?: string;
   lastName?: string;
   fullName?: string;
   headline?: string;
-  summary?: string;
-  location?: string;
-  profilePicture?: string;
-  connectionCount?: number;
-  followersCount?: number;
-  experience?: Array<{
-    title?: string;
+  connections?: number;
+  followers?: number;
+  email?: string;
+  mobileNumber?: string;
+  publicIdentifier?: string;
+  
+  // Current job
+  jobTitle?: string;
+  jobStartedOn?: string;
+  jobLocation?: string;
+  jobStillWorking?: boolean;
+  currentJobDuration?: string;
+  currentJobDurationInYrs?: number;
+  companyName?: string;
+  companyIndustry?: string;
+  companyWebsite?: string;
+  companyLinkedin?: string;
+  companySize?: string;
+  
+  // Experience array
+  experiences?: Array<{
+    companyId?: string;
     companyName?: string;
-    company?: string;
-    duration?: string;
-    description?: string;
-    location?: string;
-    startDate?: string;
-    endDate?: string;
+    title?: string;
+    jobDescription?: string;
+    jobStartedOn?: string;
+    jobEndedOn?: string | null;
+    jobStillWorking?: boolean;
+    jobLocation?: string;
+    companyWebsite?: string;
+    companyIndustry?: string;
+    companySize?: string;
   }>;
-  education?: Array<{
+  
+  // Education array
+  educations?: Array<{
     schoolName?: string;
-    school?: string;
     degreeName?: string;
-    degree?: string;
     fieldOfStudy?: string;
-    field?: string;
+    startedOn?: string;
+    endedOn?: string;
   }>;
-  skills?: Array<string | { name?: string }>;
-  languages?: Array<string | { name?: string }>;
+  
+  // Skills array
+  skills?: Array<{ title?: string } | string>;
+  
+  // Languages
+  languages?: Array<{ name?: string } | string>;
+  
+  // Error handling
+  succeeded?: boolean;
+  error?: string;
+  inputUrl?: string;
 }
 
 interface EnrichedLeadProfile {
@@ -81,11 +113,7 @@ serve(async (req) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        profileUrls: [linkedinUrl],
-        proxy: {
-          useApifyProxy: true,
-          apifyProxyGroups: ["RESIDENTIAL"]
-        }
+        profileUrls: [linkedinUrl]
       }),
     });
 
@@ -96,16 +124,25 @@ serve(async (req) => {
     }
 
     const profiles: LinkedInProfile[] = await apifyResponse.json();
+    console.log('Resposta Apify recebida:', JSON.stringify(profiles, null, 2).substring(0, 1000));
     
     if (!profiles || profiles.length === 0) {
       throw new Error('Perfil não encontrado no LinkedIn');
     }
 
     const profile = profiles[0];
+    
+    // Verificar se houve erro no perfil
+    if (profile.succeeded === false) {
+      console.error('Apify retornou erro:', profile.error);
+      throw new Error(profile.error || 'Perfil não pode ser enriquecido');
+    }
+    
     console.log('Perfil encontrado:', profile.fullName || `${profile.firstName} ${profile.lastName}`);
 
     // Processar e gerar descrição
     const enrichedProfile = processProfile(profile, linkedinUrl);
+    console.log('Perfil processado:', enrichedProfile.fullName, '-', enrichedProfile.currentRole);
 
     return new Response(
       JSON.stringify({ profile: enrichedProfile }),
@@ -128,29 +165,44 @@ function processProfile(profile: LinkedInProfile, linkedinUrl: string): Enriched
   // Extrair nome completo
   const fullName = profile.fullName || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || 'Não informado';
   
-  // Extrair experiência atual
-  const currentExp = profile.experience?.[0];
-  const currentRole = currentExp?.title || 'Não informado';
-  const currentCompany = currentExp?.companyName || currentExp?.company || 'Não informado';
+  // Extrair cargo atual - primeiro do jobTitle, depois do experiences
+  let currentRole = profile.jobTitle || '';
+  let currentCompany = profile.companyName || '';
+  
+  // Se não tiver jobTitle, pegar do primeiro experience
+  if (!currentRole && profile.experiences && profile.experiences.length > 0) {
+    const firstExp = profile.experiences[0];
+    currentRole = firstExp.title || '';
+    currentCompany = currentCompany || firstExp.companyName || '';
+  }
+  
+  currentRole = currentRole || 'Não informado';
+  currentCompany = currentCompany || 'Não informado';
   
   // Calcular anos de experiência
   let experienceYears = 0;
-  if (profile.experience) {
-    profile.experience.forEach(exp => {
-      // Tentar parsear duração (ex: "3 anos 2 meses", "3 yrs 2 mos")
-      const durationStr = exp.duration || '';
-      const yearsMatch = durationStr.match(/(\d+)\s*(anos?|yrs?|years?)/i);
-      const monthsMatch = durationStr.match(/(\d+)\s*(meses?|mos?|months?)/i);
-      
-      if (yearsMatch) {
-        experienceYears += parseInt(yearsMatch[1]);
-      }
-      if (monthsMatch) {
-        experienceYears += parseInt(monthsMatch[1]) / 12;
-      }
-    });
+  
+  // Primeiro tentar do currentJobDurationInYrs
+  if (profile.currentJobDurationInYrs) {
+    experienceYears = Math.round(profile.currentJobDurationInYrs);
   }
-  experienceYears = Math.round(experienceYears);
+  
+  // Se tiver experiences, somar duração total
+  if (profile.experiences && profile.experiences.length > 0) {
+    let totalYears = 0;
+    for (const exp of profile.experiences) {
+      if (exp.jobStartedOn) {
+        const startYear = parseInt(exp.jobStartedOn.split('-')[0]);
+        const endYear = exp.jobEndedOn 
+          ? parseInt(exp.jobEndedOn.split('-')[0]) 
+          : new Date().getFullYear();
+        totalYears += (endYear - startYear);
+      }
+    }
+    if (totalYears > experienceYears) {
+      experienceYears = totalYears;
+    }
+  }
 
   // Top 5 skills
   const topSkills: string[] = [];
@@ -158,19 +210,19 @@ function processProfile(profile: LinkedInProfile, linkedinUrl: string): Enriched
     for (const skill of profile.skills.slice(0, 5)) {
       if (typeof skill === 'string') {
         topSkills.push(skill);
-      } else if (skill?.name) {
-        topSkills.push(skill.name);
+      } else if (skill?.title) {
+        topSkills.push(skill.title);
       }
     }
   }
 
   // Resumo de educação
-  const education = profile.education?.[0];
   let educationSummary = 'Não informado';
-  if (education) {
-    const school = education.schoolName || education.school || '';
-    const degree = education.degreeName || education.degree || '';
-    const field = education.fieldOfStudy || education.field || '';
+  if (profile.educations && profile.educations.length > 0) {
+    const education = profile.educations[0];
+    const school = education.schoolName || '';
+    const degree = education.degreeName || '';
+    const field = education.fieldOfStudy || '';
     
     const parts = [degree, field, school].filter(Boolean);
     if (parts.length > 0) {
@@ -186,7 +238,7 @@ function processProfile(profile: LinkedInProfile, linkedinUrl: string): Enriched
     currentCompany,
     experienceYears,
     topSkills,
-    summary: profile.summary || '',
+    companyIndustry: profile.companyIndustry || '',
     education: educationSummary
   });
 
@@ -194,7 +246,7 @@ function processProfile(profile: LinkedInProfile, linkedinUrl: string): Enriched
     linkedinUrl,
     fullName,
     headline: profile.headline || '',
-    summary: profile.summary || '',
+    summary: '', // Apify não retorna summary no formato atual
     currentRole,
     currentCompany,
     experienceYears,
@@ -211,7 +263,7 @@ function generateProfileDescription(data: {
   currentCompany: string;
   experienceYears: number;
   topSkills: string[];
-  summary: string;
+  companyIndustry: string;
   education: string;
 }): string {
   const parts: string[] = [];
@@ -231,17 +283,25 @@ function generateProfileDescription(data: {
   }
 
   // Linha 3: Headline (se diferente do cargo)
-  if (data.headline && !data.headline.toLowerCase().includes(data.currentRole.toLowerCase().substring(0, 10))) {
+  if (data.headline && data.currentRole !== 'Não informado' && 
+      !data.headline.toLowerCase().includes(data.currentRole.toLowerCase().substring(0, 10))) {
     parts.push(`Se posiciona como "${data.headline}".`);
+  } else if (data.headline && data.currentRole === 'Não informado') {
+    parts.push(`${data.headline}.`);
   }
 
-  // Linha 4: Skills relevantes
+  // Linha 4: Indústria
+  if (data.companyIndustry) {
+    parts.push(`Atua no setor de ${data.companyIndustry}.`);
+  }
+
+  // Linha 5: Skills relevantes
   if (data.topSkills.length > 0) {
     const skillsText = data.topSkills.slice(0, 4).join(', ');
     parts.push(`Principais competências: ${skillsText}.`);
   }
 
-  // Linha 5: Formação
+  // Linha 6: Formação
   if (data.education && data.education !== 'Não informado') {
     parts.push(`Formação: ${data.education}.`);
   }
