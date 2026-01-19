@@ -9,6 +9,14 @@ const corsHeaders = {
 // ============================================
 // INTERFACES
 // ============================================
+interface UrlCitation {
+  type: 'url_citation';
+  start_index: number;
+  end_index: number;
+  url: string;
+  title: string;
+}
+
 interface Evidence {
   title: string;
   indication: string;
@@ -57,15 +65,77 @@ const defaultCompanyProfile: CompanyProfile = {
 };
 
 // ============================================
-// RELEVANCE VALIDATION
+// URL HELPERS
 // ============================================
-interface RelevanceCheck {
-  mentionsCompany: boolean;
-  isRelevantContent: boolean;
-  isReliableSource: boolean;
-  isRecent: boolean;
+function extractSourceFromUrl(url: string): string {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    if (hostname.includes('linkedin')) return 'LinkedIn';
+    if (hostname.includes('sap.com')) return 'SAP';
+    if (hostname.includes('itforum')) return 'IT Forum';
+    if (hostname.includes('canaltech')) return 'Canaltech';
+    if (hostname.includes('valor')) return 'Valor Econômico';
+    if (hostname.includes('infomoney')) return 'InfoMoney';
+    if (hostname.includes('exame')) return 'Exame';
+    if (hostname.includes('computerworld')) return 'ComputerWorld';
+    if (hostname.includes('wikipedia')) return 'Wikipedia';
+    if (hostname.includes('reuters')) return 'Reuters';
+    if (hostname.includes('forbes')) return 'Forbes';
+    if (hostname.includes('bloomberg')) return 'Bloomberg';
+    return hostname.replace('www.', '').split('.')[0];
+  } catch {
+    return 'Web';
+  }
 }
 
+function extractIndicationFromContext(fullText: string, annotation: UrlCitation, category: 'sap' | 'tech' | 'linkedin'): string {
+  // Extrair o contexto ao redor da citação
+  const start = Math.max(0, annotation.start_index - 150);
+  const end = Math.min(fullText.length, annotation.end_index + 150);
+  let context = fullText.substring(start, end).trim();
+  
+  // Limpar e formatar
+  context = context.replace(/\[\d+\]/g, '').trim();
+  
+  // Se muito longo, truncar
+  if (context.length > 200) {
+    context = context.substring(0, 200) + '...';
+  }
+  
+  // Fallback baseado em categoria
+  if (!context || context.length < 20) {
+    switch (category) {
+      case 'sap': return 'Informação relevante sobre ambiente SAP da empresa';
+      case 'tech': return 'Informação sobre tecnologia e infraestrutura';
+      case 'linkedin': return 'Publicação profissional sobre a empresa';
+    }
+  }
+  
+  return context;
+}
+
+function extractDateFromUrl(url: string): string | undefined {
+  // Tentar extrair data de padrões comuns em URLs
+  const patterns = [
+    /\/(\d{4})\/(\d{2})\//,           // /2024/01/
+    /\/(\d{4})-(\d{2})-\d{2}\//,      // /2024-01-15/
+    /-(\d{4})(\d{2})\d{2}/,           // -20240115
+    /(\d{4})(\d{2})\d{2}/,            // 20240115
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) {
+      return `${match[1]}-${match[2]}`;
+    }
+  }
+  
+  return undefined;
+}
+
+// ============================================
+// RELEVANCE VALIDATION
+// ============================================
 function calculateRelevanceScore(
   evidence: { title: string; indication: string; link: string; source: string; date?: string },
   company: string,
@@ -75,6 +145,7 @@ function calculateRelevanceScore(
   const companyLower = company.toLowerCase();
   const titleLower = evidence.title.toLowerCase();
   const indicationLower = evidence.indication.toLowerCase();
+  const linkLower = evidence.link.toLowerCase();
   
   // 1. Título menciona a empresa? (+30 pontos)
   if (titleLower.includes(companyLower) || indicationLower.includes(companyLower)) {
@@ -95,16 +166,15 @@ function calculateRelevanceScore(
       score += 40;
     }
   } else if (category === 'linkedin') {
-    const linkedinKeywords = ['linkedin', 'publicação', 'post', 'compartilhou', 'anuncio', 'vaga'];
-    if (linkedinKeywords.some(kw => titleLower.includes(kw) || indicationLower.includes(kw)) || 
-        evidence.link.includes('linkedin.com')) {
+    // Para LinkedIn, o link é o principal indicador
+    if (linkLower.includes('linkedin.com')) {
       score += 40;
     }
   }
   
   // 3. Fonte confiável? (+20 pontos)
   const reliableSources = ['linkedin.com', 'sap.com', 'itforum.com.br', 'canaltech.com.br', 'valor.com.br', 'infomoney.com.br', 'exame.com', 'computerworld.com.br', 'wikipedia.org'];
-  if (reliableSources.some(src => evidence.link.toLowerCase().includes(src) || evidence.source.toLowerCase().includes(src))) {
+  if (reliableSources.some(src => linkLower.includes(src) || evidence.source.toLowerCase().includes(src))) {
     score += 20;
   }
   
@@ -136,14 +206,17 @@ function validateEvidence(
 }
 
 // ============================================
-// OPENAI WEB SEARCH HELPER
+// OPENAI WEB SEARCH - EXTRAÇÃO DE URLS REAIS
 // ============================================
 async function performWebSearch(
   apiKey: string, 
   searchPrompt: string, 
-  category: 'sap' | 'tech' | 'linkedin'
-): Promise<{ evidences: Evidence[]; companyProfile?: CompanyProfile }> {
+  category: 'sap' | 'tech' | 'linkedin',
+  company: string
+): Promise<{ evidences: Evidence[]; companyProfile?: CompanyProfile; leadProfile?: LeadProfile }> {
   try {
+    console.log(`🔍 Iniciando busca ${category} para: ${company}`);
+    
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -158,19 +231,37 @@ async function performWebSearch(
     });
 
     if (!response.ok) {
-      console.error(`Erro na busca ${category}:`, response.status);
+      console.error(`❌ Erro na busca ${category}:`, response.status);
       return { evidences: [] };
     }
 
     const result = await response.json();
+    
+    // ============================================
+    // EXTRAIR URLs REAIS DAS ANNOTATIONS
+    // ============================================
     let outputText = '';
+    let annotations: UrlCitation[] = [];
     
     if (result.output) {
       for (const output of result.output) {
         if (output.type === 'message' && output.content) {
           for (const content of output.content) {
-            if (content.type === 'output_text' && content.text) {
-              outputText = content.text;
+            if (content.type === 'output_text') {
+              outputText = content.text || '';
+              
+              // CRÍTICO: Extrair annotations com URLs REAIS
+              if (content.annotations && Array.isArray(content.annotations)) {
+                annotations = content.annotations
+                  .filter((a: any) => a.type === 'url_citation' && a.url && a.title)
+                  .map((a: any) => ({
+                    type: 'url_citation' as const,
+                    start_index: a.start_index || 0,
+                    end_index: a.end_index || 0,
+                    url: a.url,
+                    title: a.title
+                  }));
+              }
               break;
             }
           }
@@ -178,38 +269,99 @@ async function performWebSearch(
       }
     }
 
-    if (!outputText) {
-      console.log(`Nenhum texto encontrado para ${category}`);
+    console.log(`📎 ${category}: Encontradas ${annotations.length} citações com URLs reais`);
+
+    if (annotations.length === 0) {
+      console.log(`⚠️ ${category}: Nenhuma URL real encontrada nas annotations`);
       return { evidences: [] };
     }
 
-    // Parse JSON from response
-    let jsonStr = outputText;
-    const jsonMatch = outputText.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim();
-    }
-    
-    const jsonStartIndex = jsonStr.indexOf('{');
-    const jsonEndIndex = jsonStr.lastIndexOf('}');
-    if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
-      jsonStr = jsonStr.substring(jsonStartIndex, jsonEndIndex + 1);
-    }
-
-    const parsed = JSON.parse(jsonStr);
-    const evidences: Evidence[] = (parsed.evidences || [])
-      .filter((e: any) => e.title && e.link)
-      .map((e: any) => ({
-        ...e,
+    // ============================================
+    // CONSTRUIR EVIDÊNCIAS A PARTIR DAS URLS REAIS
+    // ============================================
+    const evidences: Evidence[] = annotations
+      .filter(annotation => {
+        // Filtrar por categoria
+        const urlLower = annotation.url.toLowerCase();
+        if (category === 'linkedin') {
+          return urlLower.includes('linkedin.com');
+        } else if (category === 'sap') {
+          // SAP pode vir de qualquer fonte relevante
+          return true;
+        } else if (category === 'tech') {
+          // Tech: excluir links que parecem ser sobre SAP
+          const titleLower = annotation.title.toLowerCase();
+          const hasSap = ['sap', 's/4hana', 's4hana', 'hana'].some(kw => titleLower.includes(kw));
+          return !hasSap;
+        }
+        return true;
+      })
+      .map(annotation => ({
+        title: annotation.title,
+        indication: extractIndicationFromContext(outputText, annotation, category),
+        link: annotation.url,  // URL REAL das annotations!
+        source: extractSourceFromUrl(annotation.url),
+        date: extractDateFromUrl(annotation.url),
         category
       }));
 
+    console.log(`✅ ${category}: ${evidences.length} evidências criadas com URLs reais`);
+
+    // ============================================
+    // EXTRAIR DADOS ESTRUTURADOS (profile, etc)
+    // ============================================
+    let companyProfile: CompanyProfile | undefined;
+    let leadProfile: LeadProfile | undefined;
+    
+    // Tentar extrair JSON do texto para dados estruturados (não para links!)
+    if (outputText) {
+      try {
+        let jsonStr = outputText;
+        const jsonMatch = outputText.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+          jsonStr = jsonMatch[1].trim();
+        }
+        
+        const jsonStartIndex = jsonStr.indexOf('{');
+        const jsonEndIndex = jsonStr.lastIndexOf('}');
+        if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
+          jsonStr = jsonStr.substring(jsonStartIndex, jsonEndIndex + 1);
+          const parsed = JSON.parse(jsonStr);
+          
+          // Extrair apenas dados estruturados, não links
+          if (parsed.companyProfile && category === 'sap') {
+            companyProfile = {
+              summary: parsed.companyProfile.summary || '',
+              founded: parsed.companyProfile.founded,
+              headquarters: parsed.companyProfile.headquarters,
+              employees: parsed.companyProfile.employees,
+              revenue: parsed.companyProfile.revenue,
+              markets: parsed.companyProfile.markets,
+              mainProducts: parsed.companyProfile.mainProducts,
+              purpose: parsed.companyProfile.purpose
+            };
+          }
+          
+          if (parsed.leadProfile && category === 'linkedin') {
+            leadProfile = {
+              linkedinUrl: parsed.leadProfile.linkedinUrl,
+              background: parsed.leadProfile.background,
+              recentActivity: parsed.leadProfile.recentActivity
+            };
+          }
+        }
+      } catch {
+        // Sem JSON estruturado - ok, as evidências já foram criadas das annotations
+      }
+    }
+
     return { 
       evidences,
-      companyProfile: parsed.companyProfile 
+      companyProfile,
+      leadProfile
     };
   } catch (error) {
-    console.error(`Erro ao processar busca ${category}:`, error);
+    console.error(`❌ Erro ao processar busca ${category}:`, error);
     return { evidences: [] };
   }
 }
@@ -249,7 +401,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('Pesquisando informações para:', company, leadName);
+    console.log('🚀 Pesquisando informações para:', company, leadName);
 
     // ============================================
     // BUSCA 1: PERFIL DA EMPRESA + SAP
@@ -278,13 +430,10 @@ PARTE 2 - AMBIENTE SAP (ESPECÍFICO):
 - "${company}" projeto SAP go-live
 ${industry ? `- "${company}" ${industry} SAP` : ''}
 
-REGRAS CRÍTICAS:
-- Para companyProfile.summary: escreva um parágrafo de 3-5 frases descrevendo a empresa
-- APENAS inclua evidências SAP que mencionem EXPLICITAMENTE a empresa "${company}"
-- Cada evidência DEVE ter URL real da fonte
-- Se não encontrar informações SAP, retorne array vazio - NÃO INVENTE
+IMPORTANTE: Analise os resultados e forneça um resumo estruturado.
+As URLs dos resultados serão extraídas automaticamente das citações.
 
-Retorne APENAS JSON válido:
+Retorne um JSON com o perfil da empresa:
 {
   "companyProfile": {
     "summary": "Parágrafo de 3-5 frases sobre a empresa",
@@ -295,16 +444,7 @@ Retorne APENAS JSON válido:
     "markets": ["Lista"] ou null,
     "mainProducts": "Principais produtos/serviços ou null",
     "purpose": "Propósito/missão ou null"
-  },
-  "evidences": [
-    {
-      "title": "Título específico sobre SAP na empresa",
-      "indication": "O que indica para vendedor SAP",
-      "link": "https://url-real.com",
-      "source": "Nome da fonte",
-      "date": "2024-01"
-    }
-  ]
+  }
 }`;
 
     // ============================================
@@ -323,24 +463,12 @@ BUSCAR NA WEB:
 - "${company}" CRM Salesforce Dynamics
 ${industry ? `- "${company}" ${industry} tecnologia inovação` : ''}
 
-REGRAS CRÍTICAS:
+IMPORTANTE: 
 - NÃO inclua nada relacionado a SAP, S/4HANA, ABAP, Fiori
-- APENAS inclua evidências que mencionem EXPLICITAMENTE a empresa "${company}"
-- Cada evidência DEVE ter URL real da fonte
-- Se não encontrar, retorne array vazio - NÃO INVENTE
+- Foque em outros sistemas e tecnologias
+- As URLs serão extraídas automaticamente das citações
 
-Retorne APENAS JSON válido:
-{
-  "evidences": [
-    {
-      "title": "Título sobre tecnologia (não SAP)",
-      "indication": "O que indica sobre ambiente tecnológico",
-      "link": "https://url-real.com",
-      "source": "Nome da fonte",
-      "date": "2024-01"
-    }
-  ]
-}`;
+Analise os resultados encontrados sobre tecnologia da empresa.`;
 
     // ============================================
     // BUSCA 3: LINKEDIN (PUBLICAÇÕES SOBRE SAP)
@@ -355,38 +483,28 @@ BUSCAR NA WEB:
 - site:linkedin.com "${company}" SAP go-live
 - site:linkedin.com "${company}" ERP implementação
 ${leadName ? `- site:linkedin.com "${leadName}" "${company}" SAP` : ''}
-${leadName ? `- site:linkedin.com "${leadName}" perfil` : ''}
+${leadName ? `- site:linkedin.com "${leadName}" perfil profissional` : ''}
 
-REGRAS CRÍTICAS:
-- APENAS publicações/posts do LinkedIn
-- APENAS conteúdo que mencione "${company}" E SAP/ERP
-- Cada evidência DEVE ter URL do LinkedIn
-- Se não encontrar, retorne array vazio - NÃO INVENTE
+IMPORTANTE:
+- APENAS busque no LinkedIn
+- Foque em publicações sobre projetos SAP na empresa
+- As URLs do LinkedIn serão extraídas automaticamente das citações
 
-Retorne APENAS JSON válido:
+${leadName ? `Se encontrar o perfil de ${leadName}, inclua:` : ''}
 {
-  "evidences": [
-    {
-      "title": "Publicação sobre SAP na empresa",
-      "indication": "O que indica sobre ambiente SAP",
-      "link": "https://linkedin.com/...",
-      "source": "LinkedIn",
-      "date": "2024-01"
-    }
-  ],
   "leadProfile": {
-    "linkedinUrl": "URL do perfil do lead ou null",
+    "linkedinUrl": "URL do perfil ou null",
     "background": "Resumo do background profissional ou null",
     "recentActivity": "Atividade recente relevante ou null"
   }
 }`;
 
     // Executar as 3 buscas em paralelo
-    console.log('Iniciando 3 buscas em paralelo...');
+    console.log('⚡ Iniciando 3 buscas em paralelo...');
     const [sapResult, techResult, linkedinResult] = await Promise.all([
-      performWebSearch(OPENAI_API_KEY, sapSearchPrompt, 'sap'),
-      performWebSearch(OPENAI_API_KEY, techSearchPrompt, 'tech'),
-      performWebSearch(OPENAI_API_KEY, linkedinSearchPrompt, 'linkedin')
+      performWebSearch(OPENAI_API_KEY, sapSearchPrompt, 'sap', company),
+      performWebSearch(OPENAI_API_KEY, techSearchPrompt, 'tech', company),
+      performWebSearch(OPENAI_API_KEY, linkedinSearchPrompt, 'linkedin', company)
     ]);
 
     // Validar e filtrar evidências
@@ -403,7 +521,7 @@ Retorne APENAS JSON válido:
           relevanceScore: validation.score
         });
       } else {
-        console.log(`SAP descartado (score ${validation.score}): ${evidence.title.substring(0, 50)}`);
+        console.log(`🚫 SAP descartado (score ${validation.score}): ${evidence.title.substring(0, 50)}`);
       }
     }
 
@@ -416,7 +534,7 @@ Retorne APENAS JSON válido:
           relevanceScore: validation.score
         });
       } else {
-        console.log(`Tech descartado (score ${validation.score}): ${evidence.title.substring(0, 50)}`);
+        console.log(`🚫 Tech descartado (score ${validation.score}): ${evidence.title.substring(0, 50)}`);
       }
     }
 
@@ -429,7 +547,7 @@ Retorne APENAS JSON válido:
           relevanceScore: validation.score
         });
       } else {
-        console.log(`LinkedIn descartado (score ${validation.score}): ${evidence.title.substring(0, 50)}`);
+        console.log(`🚫 LinkedIn descartado (score ${validation.score}): ${evidence.title.substring(0, 50)}`);
       }
     }
 
@@ -437,7 +555,7 @@ Retorne APENAS JSON válido:
     const companyProfile: CompanyProfile = sapResult.companyProfile || defaultCompanyProfile;
 
     // Lead profile vem da busca LinkedIn
-    const leadProfile: LeadProfile = (linkedinResult as any).leadProfile || {};
+    const leadProfile: LeadProfile = linkedinResult.leadProfile || {};
 
     // Combinar todas as evidências validadas
     const allEvidences = [
@@ -455,7 +573,7 @@ Retorne APENAS JSON válido:
       companyProfile
     };
 
-    console.log(`Pesquisa concluída:
+    console.log(`🏁 Pesquisa concluída com URLs REAIS:
       - SAP: ${validatedSapEvidences.length} evidências validadas
       - Tech: ${validatedTechEvidences.length} evidências validadas  
       - LinkedIn: ${validatedLinkedinEvidences.length} evidências validadas
@@ -468,7 +586,7 @@ Retorne APENAS JSON válido:
     );
 
   } catch (error) {
-    console.error('Erro na função research-company:', error);
+    console.error('❌ Erro na função research-company:', error);
     return new Response(
       JSON.stringify({ 
         evidences: [], 
