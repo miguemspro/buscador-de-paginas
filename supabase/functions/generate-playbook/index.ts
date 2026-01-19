@@ -872,11 +872,17 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
 
     const result = await response.json();
     console.log('Resposta da API recebida');
+    
+    // Verificar se a resposta contém erro (mesmo com status 200)
+    if (result.error) {
+      console.error('Erro na resposta da API:', JSON.stringify(result.error));
+      throw new Error(result.error.message || 'Erro interno do servidor de IA');
+    }
 
     const toolCall = result.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall || toolCall.function.name !== 'generate_playbook') {
       console.error('Resposta inesperada da API:', JSON.stringify(result, null, 2));
-      throw new Error('Formato de resposta inesperado da API');
+      throw new Error('Formato de resposta inesperado da API. Tente novamente.');
     }
 
     const playbook = JSON.parse(toolCall.function.arguments);
