@@ -38,7 +38,7 @@ import { toast } from 'sonner';
 import { ExportPDF } from './ExportPDF';
 import { FeedbackForm } from '@/components/Feedback/FeedbackForm';
 
-type SectionId = 'summary' | 'evidences' | 'pains' | 'solutions' | 'cases' | 'discovery' | 'approach';
+type SectionId = 'summary' | 'evidences' | 'pains' | 'solutions' | 'cases' | 'discovery';
 
 export default function PlaybookView() {
   const { playbook, extractedData, reset, playbookId } = usePlaybookStore();
@@ -52,7 +52,6 @@ export default function PlaybookView() {
     solutions: true,
     cases: true,
     discovery: true,
-    approach: true,
   });
 
   if (!playbook) return null;
@@ -152,7 +151,6 @@ ${playbook.approachScript?.fullText || ''}
     { id: 'solutions' as SectionId, label: 'Soluções', icon: Sparkles },
     { id: 'cases' as SectionId, label: 'Cases', icon: Award },
     { id: 'discovery' as SectionId, label: 'Discovery', icon: HelpCircle },
-    { id: 'approach' as SectionId, label: 'Abordagem', icon: MessageSquare },
   ];
 
   return (
@@ -288,9 +286,8 @@ ${playbook.approachScript?.fullText || ''}
               {expandedSections.summary && playbook.executiveSummary && (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {[
-                    { icon: Building2, label: 'Contexto da Empresa', value: playbook.executiveSummary.companyContext, color: 'text-blue-500' },
+                    { icon: Building2, label: 'Sobre a Empresa', value: playbook.executiveSummary.companyContext, color: 'text-blue-500' },
                     { icon: User, label: 'Perfil do Lead', value: playbook.executiveSummary.leadProfile, color: 'text-green-500' },
-                    { icon: Target, label: 'Prioridades 2025/2026', value: playbook.executiveSummary.priorities2026, color: 'text-amber-500' },
                     { icon: Zap, label: 'Ângulo de Abordagem', value: playbook.executiveSummary.approachAngle, color: 'text-purple-500' },
                     { icon: TrendingUp, label: 'Contexto Público', value: playbook.executiveSummary.publicContext, color: 'text-cyan-500' },
                   ].map((item, i) => {
@@ -407,14 +404,6 @@ ${playbook.approachScript?.fullText || ''}
                       <p className="text-sm text-muted-foreground italic">Nenhuma evidência de tecnologia encontrada para esta empresa.</p>
                     )}
                   </div>
-
-                  {/* Informação sobre a pesquisa */}
-                  {(sapEvidences.length > 0 || techEvidences.length > 0) && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-2 pt-2 border-t">
-                      <Sparkles className="h-3 w-3 text-green-500" />
-                      Informações pesquisadas automaticamente via OpenAI Web Search
-                    </p>
-                  )}
                 </div>
               )}
             </Card>
@@ -601,69 +590,6 @@ ${playbook.approachScript?.fullText || ''}
               )}
             </Card>
 
-            {/* 6. TEXTO FINAL DE ABORDAGEM */}
-            <Card className="p-6" id="approach">
-              <div className="flex items-center justify-between mb-4">
-                <button 
-                  onClick={() => toggleSection('approach')}
-                  className="flex items-center gap-2 text-left"
-                >
-                <h2 className="font-semibold text-lg flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5 text-green-500" />
-                    7. Texto de Abordagem
-                  </h2>
-                </button>
-                <Button 
-                  variant="default" 
-                  size="sm" 
-                  onClick={handleCopyScript}
-                  className="gap-2"
-                >
-                  {copiedScript ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  {copiedScript ? 'Copiado!' : 'Copiar Script'}
-                </Button>
-              </div>
-              
-              {expandedSections.approach && playbook.approachScript && (
-                <div className="space-y-4">
-                  {/* Estrutura do Script */}
-                  <div className="grid gap-3 sm:grid-cols-2 mb-4">
-                    <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-3 border border-green-200 dark:border-green-800">
-                      <p className="text-xs font-medium text-green-600 dark:text-green-400 uppercase mb-1">Abertura</p>
-                      <p className="text-sm">{playbook.approachScript.opening}</p>
-                    </div>
-                    <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
-                      <p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase mb-1">Sinais Públicos</p>
-                      <p className="text-sm">{playbook.approachScript.publicSignalsMention}</p>
-                    </div>
-                    <div className="bg-purple-50 dark:bg-purple-950/30 rounded-lg p-3 border border-purple-200 dark:border-purple-800">
-                      <p className="text-xs font-medium text-purple-600 dark:text-purple-400 uppercase mb-1">Intenção</p>
-                      <p className="text-sm">{playbook.approachScript.clearIntention}</p>
-                    </div>
-                    <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 border border-amber-200 dark:border-amber-800">
-                      <p className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase mb-1">Perguntas Estratégicas</p>
-                      <ul className="text-sm space-y-1">
-                        {playbook.approachScript.strategicQuestions?.map((q, i) => (
-                          <li key={i}>• {q}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-
-                  {/* Texto Completo */}
-                  <div className="bg-muted/50 rounded-lg p-6 border-2 border-primary/20">
-                    <p className="text-xs font-medium text-muted-foreground uppercase mb-3">
-                      📞 Texto Completo para a Ligação
-                    </p>
-                    <div className="prose prose-sm dark:prose-invert max-w-none">
-                      <div className="text-base leading-relaxed whitespace-pre-wrap">
-                        {playbook.approachScript.fullText}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </Card>
 
           </main>
         </div>
