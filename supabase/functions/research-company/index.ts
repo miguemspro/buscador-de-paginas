@@ -284,7 +284,24 @@ async function performWebSearch(
         // Filtrar por categoria
         const urlLower = annotation.url.toLowerCase();
         if (category === 'linkedin') {
-          return urlLower.includes('linkedin.com');
+          // CRÍTICO: Para LinkedIn, priorizar POSTS reais (não páginas de empresa genéricas)
+          const isLinkedin = urlLower.includes('linkedin.com');
+          if (!isLinkedin) return false;
+          
+          // Priorizar posts individuais sobre páginas de empresa
+          const isPost = urlLower.includes('/posts/') || 
+                         urlLower.includes('/feed/update/') || 
+                         urlLower.includes('/pulse/') ||
+                         urlLower.includes('/in/');
+          const isCompanyPage = urlLower.includes('/company/') && !urlLower.includes('/posts/');
+          
+          // Se é um post, aceitar; se é página de empresa genérica, só aceitar se não houver posts
+          if (isPost) return true;
+          if (isCompanyPage) {
+            console.log(`⚠️ LinkedIn: URL de empresa genérica detectada: ${annotation.url}`);
+            return true; // Aceitar como fallback, mas com log
+          }
+          return true;
         } else if (category === 'sap') {
           // SAP pode vir de qualquer fonte relevante
           return true;
@@ -303,7 +320,17 @@ async function performWebSearch(
         source: extractSourceFromUrl(annotation.url),
         date: extractDateFromUrl(annotation.url),
         category
-      }));
+      }))
+      // Para LinkedIn, priorizar posts sobre páginas de empresa
+      .sort((a, b) => {
+        if (category === 'linkedin') {
+          const aIsPost = a.link.includes('/posts/') || a.link.includes('/feed/update/') || a.link.includes('/in/');
+          const bIsPost = b.link.includes('/posts/') || b.link.includes('/feed/update/') || b.link.includes('/in/');
+          if (aIsPost && !bIsPost) return -1;
+          if (!aIsPost && bIsPost) return 1;
+        }
+        return 0;
+      });
 
     console.log(`✅ ${category}: ${evidences.length} evidências criadas com URLs reais`);
 
@@ -471,33 +498,42 @@ IMPORTANTE:
 Analise os resultados encontrados sobre tecnologia da empresa.`;
 
     // ============================================
-    // BUSCA 3: LINKEDIN (PUBLICAÇÕES SOBRE SAP)
+    // BUSCA 3: LINKEDIN (PUBLICAÇÕES INDIVIDUAIS)
     // ============================================
-    const linkedinSearchPrompt = `Você é um pesquisador de inteligência de mercado focado em redes sociais profissionais.
+    const linkedinSearchPrompt = `Você é um pesquisador de inteligência de mercado focado em encontrar PUBLICAÇÕES ESPECÍFICAS de profissionais no LinkedIn.
 
-TAREFA: Pesquisar publicações no LINKEDIN sobre a empresa "${company}" e SAP.
+TAREFA CRÍTICA: Encontrar POSTS INDIVIDUAIS de pessoas no LinkedIn sobre "${company}" e SAP.
 
-BUSCAR NA WEB:
-- site:linkedin.com "${company}" SAP projeto
-- site:linkedin.com "${company}" S/4HANA migração
-- site:linkedin.com "${company}" SAP go-live
-- site:linkedin.com "${company}" ERP implementação
-${leadName ? `- site:linkedin.com "${leadName}" "${company}" SAP` : ''}
-${leadName ? `- site:linkedin.com "${leadName}" perfil profissional` : ''}
+BUSCAR NA WEB (nesta ordem de prioridade):
+1. site:linkedin.com/posts/ "${company}" SAP S/4HANA migração
+2. site:linkedin.com/posts/ "${company}" SAP projeto go-live
+3. site:linkedin.com/feed/update/ "${company}" SAP implementação
+4. site:linkedin.com "${company}" "finalizamos" SAP
+5. site:linkedin.com "${company}" "concluímos" S/4HANA
+6. site:linkedin.com "${company}" "projeto SAP" "sucesso"
+${leadName ? `7. site:linkedin.com/in/ "${leadName}"` : ''}
+${leadName ? `8. site:linkedin.com/posts/ "${leadName}" SAP` : ''}
 
-IMPORTANTE:
-- APENAS busque no LinkedIn
-- Foque em publicações sobre projetos SAP na empresa
-- As URLs do LinkedIn serão extraídas automaticamente das citações
+PRIORIDADE MÁXIMA:
+- URLs que contenham "/posts/" ou "/feed/update/" (publicações de pessoas)
+- Publicações de colaboradores, executivos ou consultores sobre projetos SAP na empresa
+- Posts celebrando go-lives, migrações ou implementações SAP
 
-${leadName ? `Se encontrar o perfil de ${leadName}, inclua:` : ''}
+EVITAR:
+- Páginas genéricas de empresa (/company/ sem /posts/)
+- Anúncios de vagas
+- Páginas de produtos
+
+As URLs serão extraídas automaticamente das citações.
+
+${leadName ? `Se encontrar informações sobre ${leadName}:
 {
   "leadProfile": {
-    "linkedinUrl": "URL do perfil ou null",
-    "background": "Resumo do background profissional ou null",
-    "recentActivity": "Atividade recente relevante ou null"
+    "linkedinUrl": "URL do perfil",
+    "background": "Resumo profissional",
+    "recentActivity": "Publicações recentes sobre SAP"
   }
-}`;
+}` : ''}`;
 
     // Executar as 3 buscas em paralelo
     console.log('⚡ Iniciando 3 buscas em paralelo...');
