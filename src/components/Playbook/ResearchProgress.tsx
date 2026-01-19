@@ -2,7 +2,7 @@
 // FASE 1: Progresso da Pesquisa em Etapas
 // ============================================
 
-import { Loader2, CheckCircle2, Building2, User, TrendingUp, Link2, Sparkles, Linkedin } from 'lucide-react';
+import { Loader2, CheckCircle2, Building2, User, TrendingUp, Link2, Sparkles } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +10,6 @@ import { cn } from '@/lib/utils';
 
 export type ResearchPhase = 
   | 'extracting'     // OCR
-  | 'enriching'      // Enriquecendo perfil via Apify
   | 'company'        // Pesquisa empresa
   | 'lead'           // Pesquisa lead
   | 'sector'         // Pesquisa setorial
@@ -31,12 +30,6 @@ const RESEARCH_STEPS: ResearchStep[] = [
     label: 'Extraindo dados', 
     description: 'Lendo informações do Salesforce...',
     icon: Building2
-  },
-  { 
-    id: 'enriching', 
-    label: 'Enriquecendo perfil', 
-    description: 'Buscando dados reais do LinkedIn...',
-    icon: Linkedin
   },
   { 
     id: 'company', 
@@ -162,11 +155,6 @@ export default function ResearchProgress({
                       </p>
                       
                       {/* Badges de status */}
-                      {isComplete && step.id === 'enriching' && (
-                        <Badge variant="secondary" className="text-xs bg-blue-500/20 text-blue-600">
-                          LinkedIn
-                        </Badge>
-                      )}
                       {isComplete && step.id === 'company' && evidencesFound > 0 && (
                         <Badge variant="secondary" className="text-xs">
                           {evidencesFound} evidências

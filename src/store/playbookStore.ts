@@ -5,7 +5,6 @@ import type { PlaybookStep, ExtractedLeadData, GeneratedPlaybook } from '../type
 export type ResearchPhase = 
   | 'extracting'     // OCR
   | 'confirming'     // Nova: confirmação do lead
-  | 'enriching'      // Enriquecendo perfil via Apify
   | 'company'        // Pesquisa empresa
   | 'lead'           // Pesquisa lead
   | 'sector'         // Pesquisa setorial

@@ -24,6 +24,3 @@ verify_jwt = false
 
 [functions.admin-solutions]
 verify_jwt = false
-
-[functions.enrich-lead]
-verify_jwt = false
