@@ -572,42 +572,7 @@ serve(async (req) => {
     let linkedinEvidences: { title: string; indication: string; link: string; source: string; date?: string; category?: string; relevanceScore?: number }[] = [];
     let leadProfile: { linkedinUrl?: string; background?: string; recentActivity?: string } = {};
     let companyProfileSummary: string = '';
-    let enrichedLeadProfile: {
-      fullName: string;
-      headline: string;
-      currentRole: string;
-      currentCompany: string;
-      experienceYears: number;
-      topSkills: string[];
-      educationSummary: string;
-      profileDescription: string;
-    } | null = null;
-    
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    
-    // 0. Enriquecer perfil do lead via Apify (se tiver linkedinUrl)
-    if (leadData.linkedinUrl) {
-      console.log('Enriquecendo perfil do lead via Apify...');
-      try {
-        const enrichResponse = await fetch(`${supabaseUrl}/functions/v1/enrich-lead`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ linkedinUrl: leadData.linkedinUrl })
-        });
-        
-        if (enrichResponse.ok) {
-          const enrichData = await enrichResponse.json();
-          if (enrichData.profile) {
-            enrichedLeadProfile = enrichData.profile;
-            console.log('Perfil enriquecido:', enrichedLeadProfile?.fullName);
-          }
-        } else {
-          console.warn('Erro ao enriquecer perfil:', await enrichResponse.text());
-        }
-      } catch (enrichError) {
-        console.warn('Erro ao enriquecer perfil, continuando sem dados do LinkedIn:', enrichError);
-      }
-    }
     
     // 1. Pesquisar evidências da empresa
     try {
@@ -687,23 +652,12 @@ serve(async (req) => {
         ).join('\n')
       : 'Soluções a serem exploradas com base no discovery.';
 
-    // Contexto do lead - priorizar dados REAIS do Apify
-    const leadProfileText = enrichedLeadProfile
-      ? `PERFIL DO LEAD (DADOS REAIS DO LINKEDIN - usar obrigatoriamente):
-- Nome completo: ${enrichedLeadProfile.fullName}
-- Cargo atual: ${enrichedLeadProfile.currentRole} na ${enrichedLeadProfile.currentCompany}
-- Headline: ${enrichedLeadProfile.headline}
-- Experiência: ${enrichedLeadProfile.experienceYears} anos
-- Skills: ${enrichedLeadProfile.topSkills.join(', ')}
-- Formação: ${enrichedLeadProfile.educationSummary}
-
-DESCRIÇÃO PRONTA DO PERFIL (use como base para o campo leadProfile do executiveSummary):
-${enrichedLeadProfile.profileDescription}`
-      : (leadProfile.background || leadProfile.recentActivity
-        ? `PERFIL DO LEAD (via pesquisa):
+    // Contexto do lead
+    const leadProfileText = (leadProfile.background || leadProfile.recentActivity)
+      ? `PERFIL DO LEAD (via pesquisa):
 - Background: ${leadProfile.background || 'Não encontrado'}
 - Atividade recente: ${leadProfile.recentActivity || 'Não encontrada'}`
-        : '');
+      : '';
 
     // Construir contexto da empresa
     const companyContextForPrompt = companyProfileSummary 
@@ -739,7 +693,7 @@ ${casesText}
 
 INSTRUÇÕES:
 1. ${companyProfileSummary ? 'Use EXATAMENTE o texto de "SOBRE A EMPRESA" acima no campo companyContext' : 'Pesquise sobre a empresa durante o discovery'}
-2. ${enrichedLeadProfile ? 'Use EXATAMENTE a descrição do PERFIL DO LEAD acima no campo leadProfile do executiveSummary' : 'Gere uma descrição do lead com base nas informações disponíveis'}
+2. Gere uma descrição do lead com base nas informações disponíveis
 3. Use as evidências, dores e soluções fornecidas acima
 4. Calibre a linguagem para ${roleConfig.language}
 5. Foque em: ${roleConfig.focus}
@@ -893,11 +847,6 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
       console.log('CompanyContext definido a partir da pesquisa');
     }
     
-    // GARANTIR que o leadProfile use os dados REAIS do Apify
-    if (enrichedLeadProfile && playbook.executiveSummary) {
-      playbook.executiveSummary.leadProfile = enrichedLeadProfile.profileDescription;
-      console.log('LeadProfile definido a partir do Apify:', enrichedLeadProfile.fullName);
-    }
     
     // Usar evidências reais da pesquisa - separadas por categoria
     playbook.sapEvidences = sapEvidences.map(e => ({
