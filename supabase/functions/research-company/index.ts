@@ -72,40 +72,25 @@ serve(async (req) => {
         tools: [{ type: 'web_search_preview' }],
         input: `Você é um pesquisador de inteligência de mercado B2B focado em SAP e tecnologia.
 
-TAREFA: Pesquisar informações REAIS sobre a empresa "${company}" ${leadName ? `e o profissional "${leadName}"` : ''}.
+TAREFA: Pesquisar informações REAIS e ATUAIS sobre a empresa "${company}" ${leadName ? `e o profissional "${leadName}"` : ''}.
+${industry ? `Setor: ${industry}` : ''}
 
-BUSCAR:
-1. Notícias recentes sobre "${company}" e SAP, ERP ou S/4HANA (últimos 12 meses)
-2. Projetos de transformação digital ou modernização de sistemas em "${company}"
-3. Vagas abertas em "${company}" para SAP, TI, ou sistemas
-4. Expansão, fusões, aquisições ou crescimento de "${company}"
-${leadName ? `5. Perfil LinkedIn de "${leadName}" em "${company}"` : ''}
+BUSCAR NA WEB:
+1. "${company}" SAP S/4HANA migração implementação projeto (últimos 3 anos)
+2. "${company}" ERP transformação digital modernização sistemas
+3. "${company}" vagas SAP TI sistemas tecnologia
+4. "${company}" expansão fusão aquisição crescimento
+5. "${company}" parceria tecnologia consultoria
+${leadName ? `6. "${leadName}" "${company}" LinkedIn perfil` : ''}
 
 IMPORTANTE:
-- Use web search para encontrar informações REAIS
-- Cada evidência deve ter URL real e verificável
-- Classifique cada evidência como tipo 'sap' (relacionada a SAP/ERP) ou 'tech' (tecnologia geral)
-- Se não encontrar, retorne arrays vazios - não invente
+- Use web search para encontrar informações REAIS e VERIFICÁVEIS
+- Cada evidência DEVE ter uma URL real da fonte
+- Classifique como 'sap' (relacionada a SAP/ERP) ou 'tech' (tecnologia geral)
+- Se não encontrar informações reais, retorne arrays vazios - NÃO INVENTE
 
-FORMATO DE RESPOSTA (JSON):
-{
-  "evidences": [
-    {
-      "title": "Título da notícia/informação",
-      "indication": "O que isso indica para um vendedor SAP",
-      "link": "URL real da fonte",
-      "source": "Nome da fonte",
-      "date": "Data (se disponível)",
-      "type": "sap" ou "tech"
-    }
-  ],
-  "leadProfile": {
-    "linkedinUrl": "URL do LinkedIn (se encontrado)" ou null,
-    "background": "Resumo do perfil" ou null,
-    "recentActivity": "Atividade recente" ou null
-  }
-}`,
-        text: { format: { type: 'json_object' } }
+Retorne APENAS um JSON válido neste formato exato (sem markdown, sem explicações):
+{"evidences":[{"title":"Título da notícia","indication":"O que isso indica para vendedor SAP","link":"https://url-real-da-fonte.com","source":"Nome da fonte","date":"2024-01","type":"sap"}],"leadProfile":{"linkedinUrl":null,"background":null,"recentActivity":null}}`
       }),
     });
 
@@ -120,7 +105,7 @@ FORMATO DE RESPOSTA (JSON):
     }
 
     const result = await response.json();
-    console.log('Resposta OpenAI recebida');
+    console.log('Resposta OpenAI recebida:', JSON.stringify(result).substring(0, 500));
 
     // Extrair dados da resposta
     let researchData: ResearchResult = {
@@ -130,11 +115,45 @@ FORMATO DE RESPOSTA (JSON):
       leadProfile: {}
     };
 
-    // A Responses API retorna em formato diferente
-    const outputText = result.output?.find((o: { type: string }) => o.type === 'message')?.content?.find((c: { type: string }) => c.type === 'output_text')?.text || '{}';
+    // A Responses API retorna em formato diferente - buscar o texto da resposta
+    let outputText = '';
+    
+    // Tentar extrair de diferentes estruturas possíveis da resposta
+    if (result.output) {
+      for (const output of result.output) {
+        if (output.type === 'message' && output.content) {
+          for (const content of output.content) {
+            if (content.type === 'output_text' && content.text) {
+              outputText = content.text;
+              break;
+            }
+          }
+        }
+      }
+    }
+    
+    console.log('Texto extraído:', outputText.substring(0, 500));
 
     try {
-      const parsed = JSON.parse(outputText);
+      // Tentar extrair JSON do texto (pode estar em markdown code block)
+      let jsonStr = outputText;
+      
+      // Remover markdown code blocks se existirem
+      const jsonMatch = outputText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[1].trim();
+      }
+      
+      // Tentar encontrar o JSON diretamente
+      const jsonStartIndex = jsonStr.indexOf('{');
+      const jsonEndIndex = jsonStr.lastIndexOf('}');
+      if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
+        jsonStr = jsonStr.substring(jsonStartIndex, jsonEndIndex + 1);
+      }
+      
+      console.log('JSON a parsear:', jsonStr.substring(0, 300));
+      
+      const parsed = JSON.parse(jsonStr);
       const allEvidences = (parsed.evidences || []).filter((e: Evidence) => e.title && e.link);
       
       researchData = {
@@ -144,7 +163,7 @@ FORMATO DE RESPOSTA (JSON):
         leadProfile: parsed.leadProfile || {}
       };
     } catch (e) {
-      console.error('Erro ao parsear JSON:', e);
+      console.error('Erro ao parsear JSON:', e, 'Texto:', outputText.substring(0, 200));
     }
 
     console.log(`Pesquisa concluída: ${researchData.evidences.length} evidências (${researchData.sapEvidences.length} SAP, ${researchData.techEvidences.length} tech)`);
