@@ -28,6 +28,7 @@ import {
   Settings,
   Server,
   Database,
+  Linkedin,
   Award,
   BarChart3,
   FileDown,
@@ -57,8 +58,9 @@ export default function PlaybookView() {
   if (!playbook) return null;
 
   // Separar evidências por categoria
-  const sapEvidences = playbook.evidences?.filter(e => e.category === 'SAP') || [];
-  const techEvidences = playbook.evidences?.filter(e => e.category === 'Tecnologia') || [];
+  const sapEvidences = playbook.sapEvidences || playbook.evidences?.filter(e => e.category === 'SAP') || [];
+  const techEvidences = playbook.techEvidences || playbook.evidences?.filter(e => e.category === 'Tecnologia') || [];
+  const linkedinEvidences = playbook.linkedinEvidences || playbook.evidences?.filter(e => e.category === 'LinkedIn') || [];
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -402,6 +404,47 @@ ${playbook.approachScript?.fullText || ''}
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground italic">Nenhuma evidência de tecnologia encontrada para esta empresa.</p>
+                    )}
+                  </div>
+
+                  {/* Separador */}
+                  <div className="border-t" />
+
+                  {/* Seção LinkedIn */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Linkedin className="h-5 w-5 text-blue-600" />
+                      <h3 className="font-semibold text-base">LinkedIn</h3>
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300">
+                        {linkedinEvidences.length} publicações
+                      </Badge>
+                    </div>
+                    {linkedinEvidences.length > 0 ? (
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {linkedinEvidences.map((evidence, i) => (
+                          <a
+                            key={i}
+                            href={evidence.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block border rounded-lg p-4 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors group border-blue-200 dark:border-blue-800"
+                          >
+                            <h4 className="font-medium text-sm mb-2 line-clamp-2">{evidence.title}</h4>
+                            <p className="text-xs text-muted-foreground mb-3 line-clamp-2">→ {evidence.indication}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-400">
+                                {evidence.source || 'LinkedIn'}
+                              </Badge>
+                              {evidence.date && (
+                                <span className="text-xs text-muted-foreground">{evidence.date}</span>
+                              )}
+                              <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">Nenhuma publicação LinkedIn sobre SAP encontrada para esta empresa.</p>
                     )}
                   </div>
                 </div>

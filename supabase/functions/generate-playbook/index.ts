@@ -566,9 +566,10 @@ serve(async (req) => {
 
     // 1. Buscar evidências reais via pesquisa
     console.log('Buscando evidências reais para:', leadData.company);
-    let realEvidences: { title: string; indication: string; link: string; source: string; date?: string; type?: string }[] = [];
-    let sapEvidences: { title: string; indication: string; link: string; source: string; date?: string }[] = [];
-    let techEvidences: { title: string; indication: string; link: string; source: string; date?: string }[] = [];
+    let realEvidences: { title: string; indication: string; link: string; source: string; date?: string; category?: string; relevanceScore?: number }[] = [];
+    let sapEvidences: { title: string; indication: string; link: string; source: string; date?: string; category?: string; relevanceScore?: number }[] = [];
+    let techEvidences: { title: string; indication: string; link: string; source: string; date?: string; category?: string; relevanceScore?: number }[] = [];
+    let linkedinEvidences: { title: string; indication: string; link: string; source: string; date?: string; category?: string; relevanceScore?: number }[] = [];
     let leadProfile: { linkedinUrl?: string; background?: string; recentActivity?: string } = {};
     let companyProfileSummary: string = '';
     
@@ -590,9 +591,10 @@ serve(async (req) => {
         realEvidences = researchData.evidences || [];
         sapEvidences = researchData.sapEvidences || [];
         techEvidences = researchData.techEvidences || [];
+        linkedinEvidences = researchData.linkedinEvidences || [];
         leadProfile = researchData.leadProfile || {};
         companyProfileSummary = researchData.companyProfile?.summary || '';
-        console.log(`Evidências encontradas: ${realEvidences.length} (${sapEvidences.length} SAP, ${techEvidences.length} tech)`);
+        console.log(`Evidências encontradas: ${realEvidences.length} total (${sapEvidences.length} SAP, ${techEvidences.length} tech, ${linkedinEvidences.length} LinkedIn)`);
         console.log(`Company profile summary: ${companyProfileSummary.substring(0, 100)}...`);
       }
     } catch (researchError) {
@@ -834,11 +836,26 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
       console.log('CompanyContext definido a partir da pesquisa');
     }
     
-    // Usar evidências reais da pesquisa
-    playbook.evidences = realEvidences.map(e => ({
+    // Usar evidências reais da pesquisa - separadas por categoria
+    playbook.sapEvidences = sapEvidences.map(e => ({
       ...e,
-      category: e.title.toLowerCase().includes('sap') ? 'SAP' : 'Tecnologia'
+      category: 'SAP' as const
     }));
+    playbook.techEvidences = techEvidences.map(e => ({
+      ...e,
+      category: 'Tecnologia' as const
+    }));
+    playbook.linkedinEvidences = linkedinEvidences.map(e => ({
+      ...e,
+      category: 'LinkedIn' as const
+    }));
+    
+    // Combinar todas as evidências para retrocompatibilidade
+    playbook.evidences = [
+      ...playbook.sapEvidences,
+      ...playbook.techEvidences,
+      ...playbook.linkedinEvidences
+    ];
 
     // Adicionar dores pré-derivadas se a IA não gerou
     if (!playbook.probablePains || playbook.probablePains.length === 0) {

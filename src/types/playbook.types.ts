@@ -42,7 +42,8 @@ export interface Evidence {
   link: string;                // URL da fonte
   source: string;              // Nome da fonte (LinkedIn, site, etc)
   date?: string;               // Data aproximada (ex: "Jan 2026")
-  category?: 'SAP' | 'Tecnologia'; // Categoria da evidência
+  category?: 'SAP' | 'Tecnologia' | 'LinkedIn'; // Categoria da evidência
+  relevanceScore?: number;     // Score de relevância (0-100)
 }
 
 // ============================================
@@ -111,7 +112,10 @@ export interface PlaybookMetadata {
 // ============================================
 export interface GeneratedPlaybook {
   executiveSummary: ExecutiveSummary;
-  evidences: Evidence[];             // 6-10 itens
+  evidences: Evidence[];             // Todas as evidências combinadas
+  sapEvidences?: Evidence[];         // Evidências específicas de SAP
+  techEvidences?: Evidence[];        // Evidências de tecnologia geral
+  linkedinEvidences?: Evidence[];    // Publicações do LinkedIn sobre SAP
   probablePains: ProbablePain[];     // 10 itens
   metaSolutions: MetaSolution[];     // 10 itens
   discoveryQuestions: DiscoveryQuestions;
