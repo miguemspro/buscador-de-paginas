@@ -84,20 +84,11 @@ ${'='.repeat(60)}
 
 📋 RESUMO EXECUTIVO:
 
-1. Contexto da Empresa:
+1. Sobre a Empresa:
 ${es?.companyContext || ''}
 
 2. Perfil do Lead:
 ${es?.leadProfile || ''}
-
-3. Prioridades 2025/2026:
-${es?.priorities2026 || ''}
-
-4. Ângulo de Abordagem:
-${es?.approachAngle || ''}
-
-5. Contexto Público:
-${es?.publicContext || ''}
 
 ${'─'.repeat(60)}
 
@@ -286,12 +277,10 @@ ${playbook.approachScript?.fullText || ''}
               </button>
               
               {expandedSections.summary && playbook.executiveSummary && (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   {[
                     { icon: Building2, label: 'Sobre a Empresa', value: playbook.executiveSummary.companyContext, color: 'text-blue-500' },
                     { icon: User, label: 'Perfil do Lead', value: playbook.executiveSummary.leadProfile, color: 'text-green-500' },
-                    { icon: Zap, label: 'Ângulo de Abordagem', value: playbook.executiveSummary.approachAngle, color: 'text-purple-500' },
-                    { icon: TrendingUp, label: 'Contexto Público', value: playbook.executiveSummary.publicContext, color: 'text-cyan-500' },
                   ].map((item, i) => {
                     const Icon = item.icon;
                     return (
