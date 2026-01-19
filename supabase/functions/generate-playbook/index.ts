@@ -561,7 +561,9 @@ serve(async (req) => {
 
     // 1. Buscar evidências reais via pesquisa
     console.log('Buscando evidências reais para:', leadData.company);
-    let realEvidences: { title: string; indication: string; link: string; source: string; date?: string }[] = [];
+    let realEvidences: { title: string; indication: string; link: string; source: string; date?: string; type?: string }[] = [];
+    let sapEvidences: { title: string; indication: string; link: string; source: string; date?: string }[] = [];
+    let techEvidences: { title: string; indication: string; link: string; source: string; date?: string }[] = [];
     let leadProfile: { linkedinUrl?: string; background?: string; recentActivity?: string } = {};
     
     try {
@@ -580,8 +582,10 @@ serve(async (req) => {
       if (researchResponse.ok) {
         const researchData = await researchResponse.json();
         realEvidences = researchData.evidences || [];
+        sapEvidences = researchData.sapEvidences || [];
+        techEvidences = researchData.techEvidences || [];
         leadProfile = researchData.leadProfile || {};
-        console.log(`Evidências encontradas: ${realEvidences.length}`);
+        console.log(`Evidências encontradas: ${realEvidences.length} (${sapEvidences.length} SAP, ${techEvidences.length} tech)`);
       }
     } catch (researchError) {
       console.warn('Erro ao buscar evidências:', researchError);
