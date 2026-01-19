@@ -499,30 +499,35 @@ PERFIL DO LEAD - AJUSTE DE LINGUAGEM:
 
 REGRAS CRÍTICAS:
 
-1. EVIDÊNCIAS: USE APENAS AS EVIDÊNCIAS FORNECIDAS
+1. SOBRE A EMPRESA: USE O TEXTO FORNECIDO
+   - Se um texto "SOBRE A EMPRESA" foi fornecido, use-o EXATAMENTE no campo companyContext
+   - Este texto foi pesquisado e validado automaticamente
+   - NÃO modifique, resuma ou altere este texto
+
+2. EVIDÊNCIAS: USE APENAS AS EVIDÊNCIAS FORNECIDAS
    - NÃO invente notícias ou eventos
    - Se nenhuma evidência foi fornecida, deixe o array vazio
 
-2. DORES: USE AS DORES PRÉ-DERIVADAS
+3. DORES: USE AS DORES PRÉ-DERIVADAS
    - As dores já foram derivadas do contexto real
    - Apenas formate-as adequadamente no output
 
-3. SOLUÇÕES: USE AS SOLUÇÕES PRÉ-MAPEADAS
+4. SOLUÇÕES: USE AS SOLUÇÕES PRÉ-MAPEADAS
    - As soluções já foram mapeadas do banco de dados
    - Apenas formate-as adequadamente no output
 
-4. CASES: USE OS CASES RANQUEADOS
+5. CASES: USE OS CASES RANQUEADOS
    - Os cases já foram selecionados por similaridade
    - Mencione-os no contexto
 
-ESTRUTURA DAS 6 SEÇÕES:
+ESTRUTURA DAS 5 SEÇÕES:
 
 1. RESUMO EXECUTIVO (5 bullets) - Calibrado para ${roleConfig.language}
+   - companyContext: OBRIGATÓRIO usar o texto "SOBRE A EMPRESA" fornecido
 2. EVIDÊNCIAS E NOTÍCIAS - Apenas as fornecidas
 3. DORES PROVÁVEIS - As pré-derivadas
 4. SOLUÇÕES META IT - As pré-mapeadas
 5. PERGUNTAS DISCOVERY - 12 perguntas em 3 grupos
-6. TEXTO DE ABORDAGEM - Tom ${roleConfig.language}
 
 SOBRE A META IT:
 - 35 anos de experiência em soluções SAP
@@ -565,6 +570,7 @@ serve(async (req) => {
     let sapEvidences: { title: string; indication: string; link: string; source: string; date?: string }[] = [];
     let techEvidences: { title: string; indication: string; link: string; source: string; date?: string }[] = [];
     let leadProfile: { linkedinUrl?: string; background?: string; recentActivity?: string } = {};
+    let companyProfileSummary: string = '';
     
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -585,7 +591,9 @@ serve(async (req) => {
         sapEvidences = researchData.sapEvidences || [];
         techEvidences = researchData.techEvidences || [];
         leadProfile = researchData.leadProfile || {};
+        companyProfileSummary = researchData.companyProfile?.summary || '';
         console.log(`Evidências encontradas: ${realEvidences.length} (${sapEvidences.length} SAP, ${techEvidences.length} tech)`);
+        console.log(`Company profile summary: ${companyProfileSummary.substring(0, 100)}...`);
       }
     } catch (researchError) {
       console.warn('Erro ao buscar evidências:', researchError);
@@ -645,8 +653,13 @@ serve(async (req) => {
       ? `PERFIL DO LEAD (via LinkedIn):\n- Background: ${leadProfile.background || 'Não encontrado'}\n- Atividade recente: ${leadProfile.recentActivity || 'Não encontrada'}`
       : '';
 
-    const userPrompt = `Gere um PLAYBOOK CONSULTIVO COMPLETO para este lead:
+    // Construir contexto da empresa
+    const companyContextForPrompt = companyProfileSummary 
+      ? `\nSOBRE A EMPRESA (use EXATAMENTE este texto no campo companyContext do executiveSummary):\n${companyProfileSummary}\n`
+      : '';
 
+    const userPrompt = `Gere um PLAYBOOK CONSULTIVO COMPLETO para este lead:
+${companyContextForPrompt}
 DADOS DO LEAD:
 - Nome: ${leadData.name || 'Não informado'}
 - Cargo: ${leadData.role || 'Não informado'} (Nível: ${roleConfig.level}/5)
@@ -673,13 +686,14 @@ CASES DE SUCESSO RANQUEADOS POR SIMILARIDADE:
 ${casesText}
 
 INSTRUÇÕES:
-1. Use EXATAMENTE as evidências, dores e soluções fornecidas acima
-2. Calibre a linguagem para ${roleConfig.language}
-3. Foque em: ${roleConfig.focus}
-4. Evite mencionar: ${roleConfig.excludeTopics.join(', ')}
-5. Priorize tópicos: ${roleConfig.priorityTopics.join(', ')}
+1. ${companyProfileSummary ? 'Use EXATAMENTE o texto de "SOBRE A EMPRESA" acima no campo companyContext' : 'Pesquise sobre a empresa durante o discovery'}
+2. Use as evidências, dores e soluções fornecidas acima
+3. Calibre a linguagem para ${roleConfig.language}
+4. Foque em: ${roleConfig.focus}
+5. Evite mencionar: ${roleConfig.excludeTopics.join(', ')}
+6. Priorize tópicos: ${roleConfig.priorityTopics.join(', ')}
 
-Gere o playbook completo com as 6 seções.`;
+Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
 
     console.log('Gerando playbook para:', leadData.name, '-', leadData.company);
 
@@ -761,17 +775,6 @@ Gere o playbook completo com as 6 seções.`;
                   },
                   required: ['phaseAndPriorities', 'operationsIntegration', 'qualification']
                 },
-                approachScript: {
-                  type: 'object',
-                  properties: {
-                    opening: { type: 'string' },
-                    publicSignalsMention: { type: 'string' },
-                    clearIntention: { type: 'string' },
-                    strategicQuestions: { type: 'array', items: { type: 'string' } },
-                    fullText: { type: 'string' }
-                  },
-                  required: ['opening', 'publicSignalsMention', 'clearIntention', 'strategicQuestions', 'fullText']
-                },
                 relevantCases: {
                   type: 'array',
                   items: {
@@ -785,7 +788,7 @@ Gere o playbook completo com as 6 seções.`;
                   }
                 }
               },
-              required: ['executiveSummary', 'evidences', 'probablePains', 'metaSolutions', 'discoveryQuestions', 'approachScript']
+              required: ['executiveSummary', 'evidences', 'probablePains', 'metaSolutions', 'discoveryQuestions']
             }
           }
         }],
@@ -824,6 +827,12 @@ Gere o playbook completo com as 6 seções.`;
     }
 
     const playbook = JSON.parse(toolCall.function.arguments);
+    
+    // GARANTIR que o companyContext use o texto pesquisado
+    if (companyProfileSummary && playbook.executiveSummary) {
+      playbook.executiveSummary.companyContext = companyProfileSummary;
+      console.log('CompanyContext definido a partir da pesquisa');
+    }
     
     // Usar evidências reais da pesquisa
     playbook.evidences = realEvidences.map(e => ({
