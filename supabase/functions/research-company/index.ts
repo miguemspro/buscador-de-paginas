@@ -284,24 +284,35 @@ async function performWebSearch(
         // Filtrar por categoria
         const urlLower = annotation.url.toLowerCase();
         if (category === 'linkedin') {
-          // CRÍTICO: Para LinkedIn, priorizar POSTS reais (não páginas de empresa genéricas)
+          // CRÍTICO: Para LinkedIn, APENAS aceitar URLs reais do LinkedIn
           const isLinkedin = urlLower.includes('linkedin.com');
           if (!isLinkedin) return false;
           
-          // Priorizar posts individuais sobre páginas de empresa
+          // Verificar se é um post individual (máxima prioridade)
           const isPost = urlLower.includes('/posts/') || 
                          urlLower.includes('/feed/update/') || 
-                         urlLower.includes('/pulse/') ||
-                         urlLower.includes('/in/');
+                         urlLower.includes('/pulse/');
+          const isProfile = urlLower.includes('/in/');
+          const isJobPosting = urlLower.includes('/jobs/');
           const isCompanyPage = urlLower.includes('/company/') && !urlLower.includes('/posts/');
           
-          // Se é um post, aceitar; se é página de empresa genérica, só aceitar se não houver posts
-          if (isPost) return true;
-          if (isCompanyPage) {
-            console.log(`⚠️ LinkedIn: URL de empresa genérica detectada: ${annotation.url}`);
-            return true; // Aceitar como fallback, mas com log
+          // Rejeitar vagas e páginas genéricas
+          if (isJobPosting) {
+            console.log(`🚫 LinkedIn: Rejeitando vaga: ${annotation.url}`);
+            return false;
           }
-          return true;
+          if (isCompanyPage) {
+            console.log(`⚠️ LinkedIn: Página genérica de empresa ignorada: ${annotation.url}`);
+            return false;
+          }
+          
+          // Aceitar posts e perfis
+          if (isPost || isProfile) {
+            console.log(`✅ LinkedIn: Aceito post/perfil: ${annotation.url}`);
+            return true;
+          }
+          
+          return false;
         } else if (category === 'sap') {
           // SAP pode vir de qualquer fonte relevante
           return true;
@@ -321,11 +332,11 @@ async function performWebSearch(
         date: extractDateFromUrl(annotation.url),
         category
       }))
-      // Para LinkedIn, priorizar posts sobre páginas de empresa
+      // Para LinkedIn, priorizar posts sobre perfis
       .sort((a, b) => {
         if (category === 'linkedin') {
-          const aIsPost = a.link.includes('/posts/') || a.link.includes('/feed/update/') || a.link.includes('/in/');
-          const bIsPost = b.link.includes('/posts/') || b.link.includes('/feed/update/') || b.link.includes('/in/');
+          const aIsPost = a.link.includes('/posts/') || a.link.includes('/feed/update/');
+          const bIsPost = b.link.includes('/posts/') || b.link.includes('/feed/update/');
           if (aIsPost && !bIsPost) return -1;
           if (!aIsPost && bIsPost) return 1;
         }
@@ -502,29 +513,27 @@ Analise os resultados encontrados sobre tecnologia da empresa.`;
     // ============================================
     const linkedinSearchPrompt = `Você é um pesquisador de inteligência de mercado focado em encontrar PUBLICAÇÕES ESPECÍFICAS de profissionais no LinkedIn.
 
-TAREFA CRÍTICA: Encontrar POSTS INDIVIDUAIS de pessoas no LinkedIn sobre "${company}" e SAP.
+TAREFA CRÍTICA: Encontrar POSTS INDIVIDUAIS de pessoas no LinkedIn sobre "${company}" e SAP/S4HANA.
 
-BUSCAR NA WEB (nesta ordem de prioridade):
-1. site:linkedin.com/posts/ "${company}" SAP S/4HANA migração
-2. site:linkedin.com/posts/ "${company}" SAP projeto go-live
-3. site:linkedin.com/feed/update/ "${company}" SAP implementação
-4. site:linkedin.com "${company}" "finalizamos" SAP
-5. site:linkedin.com "${company}" "concluímos" S/4HANA
-6. site:linkedin.com "${company}" "projeto SAP" "sucesso"
-${leadName ? `7. site:linkedin.com/in/ "${leadName}"` : ''}
-${leadName ? `8. site:linkedin.com/posts/ "${leadName}" SAP` : ''}
+IMPORTANTE: Os links serão extraídos das citações da pesquisa. Foque em encontrar:
 
-PRIORIDADE MÁXIMA:
-- URLs que contenham "/posts/" ou "/feed/update/" (publicações de pessoas)
-- Publicações de colaboradores, executivos ou consultores sobre projetos SAP na empresa
-- Posts celebrando go-lives, migrações ou implementações SAP
+BUSCAR NA WEB (prioridade):
+1. site:linkedin.com/posts "${company}" SAP migração finalizamos
+2. site:linkedin.com/posts "${company}" S/4HANA go-live projeto
+3. site:linkedin.com/posts "${company}" SAP implementação sucesso
+4. site:linkedin.com/posts SAP S/4HANA "${company}" 
+5. site:linkedin.com "${company}" SAP projeto concluído
+${leadName ? `6. site:linkedin.com/in "${leadName}"` : ''}
+${leadName ? `7. site:linkedin.com/posts "${leadName}" SAP` : ''}
 
-EVITAR:
-- Páginas genéricas de empresa (/company/ sem /posts/)
-- Anúncios de vagas
-- Páginas de produtos
+RESULTADO ESPERADO:
+- Publicações de profissionais celebrando projetos SAP
+- Posts sobre go-live, migração, implementação
+- Menções de sucesso em projetos SAP na empresa
 
-As URLs serão extraídas automaticamente das citações.
+TAMBÉM PESQUISAR (informação textual, SEM precisar de link):
+- Quantidade de vagas SAP abertas na empresa (informar apenas "X vagas de SAP para [área]")
+- Tendências de contratação SAP
 
 ${leadName ? `Se encontrar informações sobre ${leadName}:
 {
