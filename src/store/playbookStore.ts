@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { PlaybookStep, ExtractedLeadData, GeneratedPlaybook } from '../types/playbook.types';
 
 // Novo: fases de pesquisa para Fase 1
@@ -39,6 +40,7 @@ interface PlaybookState {
   setImagePreview: (preview: string | null) => void;
   setExtractedData: (data: ExtractedLeadData | null) => void;
   setPlaybook: (playbook: GeneratedPlaybook | null, id?: string) => void;
+  setPlaybookComplete: (playbook: GeneratedPlaybook, id?: string) => void;
   setLoading: (loading: boolean, message?: string) => void;
   setError: (error: string | null) => void;
   setActiveCardIndex: (index: number) => void;
@@ -61,33 +63,57 @@ const initialState = {
   activeCardIndex: 0,
 };
 
-export const usePlaybookStore = create<PlaybookState>((set) => ({
-  ...initialState,
+export const usePlaybookStore = create<PlaybookState>()(
+  persist(
+    (set) => ({
+      ...initialState,
 
-  setStep: (step) => set({ currentStep: step, error: null }),
-  
-  setResearchPhase: (phase) => set({ researchPhase: phase }),
-  
-  setImagePreview: (preview) => set({ imagePreview: preview }),
-  
-  setExtractedData: (data) => set({ extractedData: data }),
-  
-  setPlaybook: (playbook, id) => set({ playbook, playbookId: id || null }),
-  
-  setLoading: (loading, message = '') => set({ 
-    isLoading: loading, 
-    loadingMessage: message,
-    error: loading ? null : undefined 
-  }),
-  
-  setError: (error) => set({ error, isLoading: false }),
-  
-  setActiveCardIndex: (index) => set({ activeCardIndex: index }),
-  
-  setResearchMetrics: (evidences, cacheHit) => set({ 
-    evidencesFound: evidences, 
-    cacheHit 
-  }),
-  
-  reset: () => set(initialState),
-}));
+      setStep: (step) => set({ currentStep: step, error: null }),
+      
+      setResearchPhase: (phase) => set({ researchPhase: phase }),
+      
+      setImagePreview: (preview) => set({ imagePreview: preview }),
+      
+      setExtractedData: (data) => set({ extractedData: data }),
+      
+      setPlaybook: (playbook, id) => set({ playbook, playbookId: id || null }),
+      
+      // Ação atômica para evitar race conditions
+      setPlaybookComplete: (playbook, id) => set({ 
+        playbook, 
+        playbookId: id || null,
+        currentStep: 'playbook',
+        isLoading: false,
+        error: null
+      }),
+      
+      setLoading: (loading, message = '') => set({ 
+        isLoading: loading, 
+        loadingMessage: message,
+        error: loading ? null : undefined 
+      }),
+      
+      setError: (error) => set({ error, isLoading: false }),
+      
+      setActiveCardIndex: (index) => set({ activeCardIndex: index }),
+      
+      setResearchMetrics: (evidences, cacheHit) => set({ 
+        evidencesFound: evidences, 
+        cacheHit 
+      }),
+      
+      reset: () => set(initialState),
+    }),
+    {
+      name: 'playbook-storage',
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (state) => ({
+        currentStep: state.currentStep,
+        playbook: state.playbook,
+        playbookId: state.playbookId,
+        extractedData: state.extractedData,
+        imagePreview: state.imagePreview,
+      }),
+    }
+  )
+);
