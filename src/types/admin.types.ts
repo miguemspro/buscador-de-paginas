@@ -139,10 +139,34 @@ export const SOLUTION_CATEGORIES = [
 ];
 
 export const TARGET_ROLES = [
-  'C-level',
-  'Diretor',
-  'Gerente',
-  'Especialista',
+  // C-level
+  'CEO',
+  'CFO',
+  'CIO',
+  'CTO',
+  'COO',
+  // Diretoria
+  'Diretor de TI',
+  'Diretor Financeiro',
+  'Diretor de Operações',
+  'Diretor Comercial',
+  'Diretor de Supply Chain',
+  // Gerência
+  'Gerente de TI',
+  'Gerente de Projetos',
+  'Gerente SAP',
+  'Gerente Financeiro',
+  'Gerente de Compras',
+  'Gerente Tributário',
+  // Coordenação/Head
+  'Head de TI',
+  'Coordenador SAP',
+  'Coordenador de Sistemas',
+  // Especialistas
+  'Arquiteto SAP',
+  'Consultor SAP',
+  'Analista de Negócios',
+  'Especialista Fiscal',
   'Key User',
 ];
 
