@@ -54,14 +54,16 @@ export function ResponsiveDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={className}>
+      <DialogContent className={`max-h-[90vh] flex flex-col ${className || ''}`}>
         {(title || description) && (
-          <DialogHeader>
+          <DialogHeader className="flex-shrink-0">
             {title && <DialogTitle>{title}</DialogTitle>}
             {description && <DialogDescription>{description}</DialogDescription>}
           </DialogHeader>
         )}
-        {children}
+        <div className="overflow-y-auto flex-1 pr-2">
+          {children}
+        </div>
       </DialogContent>
     </Dialog>
   );
