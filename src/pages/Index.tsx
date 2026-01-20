@@ -30,14 +30,9 @@ function Index() {
       {currentStep !== 'playbook' && (
         <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
           <div className="container flex items-center justify-between h-16 px-4">
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                M.I.V.
-              </h1>
-              <p className="text-xs text-muted-foreground">
-                Meta IT Virtual Assistant
-              </p>
-            </div>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+              M.I.V.
+            </h1>
             <Link to="/admin/cases">
               <Button variant="ghost" size="sm" className="gap-2">
                 <Settings className="h-4 w-4" />
