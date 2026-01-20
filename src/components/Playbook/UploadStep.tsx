@@ -10,7 +10,7 @@ export default function UploadStep() {
     setStep, 
     setImagePreview, 
     setExtractedData, 
-    setPlaybook,
+    setPlaybookComplete,
     setLoading, 
     setError 
   } = usePlaybookStore();
@@ -34,16 +34,15 @@ export default function UploadStep() {
       setLoading(true, 'Gerando seu playbook de abordagem...');
       
       const playbook = await generatePlaybook(extracted);
-      setPlaybook(playbook);
-      setStep('playbook');
+      
+      // Atualização atômica para evitar race conditions
+      setPlaybookComplete(playbook);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao processar imagem');
       setStep('upload');
-    } finally {
-      setLoading(false);
     }
-  }, [setStep, setImagePreview, setExtractedData, setPlaybook, setLoading, setError]);
+  }, [setStep, setImagePreview, setExtractedData, setPlaybookComplete, setLoading, setError]);
 
   const handleFileSelect = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) {
