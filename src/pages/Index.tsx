@@ -32,24 +32,18 @@ function Index() {
           <div className="container flex items-center justify-between h-16 px-4">
             <div>
               <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                SDR ProspectFlow
+                M.I.V.
               </h1>
               <p className="text-xs text-muted-foreground">
-                Playbook de Abordagem com IA
+                Meta IT Virtual Assistant
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              <Link to="/admin/cases">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <Settings className="h-4 w-4" />
-                  Admin
-                </Button>
-              </Link>
-              <div className="text-right text-xs text-muted-foreground">
-                <p>Powered by</p>
-                <p className="font-semibold text-foreground">Meta IT × IA</p>
-              </div>
-            </div>
+            <Link to="/admin/cases">
+              <Button variant="ghost" size="sm" className="gap-2">
+                <Settings className="h-4 w-4" />
+                Admin
+              </Button>
+            </Link>
           </div>
         </header>
       )}
