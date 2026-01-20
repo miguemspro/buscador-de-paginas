@@ -10,7 +10,7 @@ import { Loader2, LogIn, UserPlus, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-const ALLOWED_DOMAIN = '@meta.com';
+const ALLOWED_DOMAINS = ['@meta.com', '@meta.com.br'];
 const GENERIC_ERROR = 'Você não tem credenciais necessárias para acessar o projeto M.I.V';
 
 export default function LoginPage() {
@@ -47,7 +47,9 @@ export default function LoginPage() {
     setError(null);
 
     // Validate domain silently
-    if (!email.toLowerCase().endsWith(ALLOWED_DOMAIN)) {
+    const emailLower = email.toLowerCase();
+    const isAllowedDomain = ALLOWED_DOMAINS.some(domain => emailLower.endsWith(domain));
+    if (!isAllowedDomain) {
       setError(GENERIC_ERROR);
       return;
     }
