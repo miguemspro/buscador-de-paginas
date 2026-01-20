@@ -6,15 +6,19 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   RotateCcw,
   User,
   Building2,
   Briefcase,
   AlertTriangle,
-  Lightbulb,
   Copy,
   Check,
-  MessageSquare,
   Target,
   Sparkles,
   ExternalLink,
@@ -22,8 +26,6 @@ import {
   ChevronUp,
   FileText,
   HelpCircle,
-  Zap,
-  TrendingUp,
   Users,
   Settings,
   Server,
@@ -31,13 +33,16 @@ import {
   Linkedin,
   Award,
   BarChart3,
-  FileDown,
-  ClipboardCheck
+  ClipboardCheck,
+  MoreVertical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ExportPDF } from './ExportPDF';
 import { FeedbackForm } from '@/components/Feedback/FeedbackForm';
+import { MobileBottomNav } from './MobileBottomNav';
+import { MobileLeadCard } from './MobileLeadCard';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 type SectionId = 'summary' | 'evidences' | 'pains' | 'solutions' | 'cases' | 'discovery';
 
@@ -55,12 +60,15 @@ export default function PlaybookView() {
     discovery: true,
   });
 
+  const isMobile = useIsMobile();
+
   if (!playbook) return null;
 
   // Separar evidências por categoria
   const sapEvidences = playbook.sapEvidences || playbook.evidences?.filter(e => e.category === 'SAP') || [];
   const techEvidences = playbook.techEvidences || playbook.evidences?.filter(e => e.category === 'Tecnologia') || [];
   const linkedinEvidences = playbook.linkedinEvidences || playbook.evidences?.filter(e => e.category === 'LinkedIn') || [];
+  const hasCases = playbook.relevantCases && playbook.relevantCases.length > 0;
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -147,18 +155,20 @@ ${playbook.approachScript?.fullText || ''}
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 pb-20 lg:pb-0">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex items-center justify-between h-16 px-4">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold">SDR ProspectFlow</h1>
+        <div className="container flex items-center justify-between h-14 sm:h-16 px-3 sm:px-4">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <h1 className="text-base sm:text-xl font-bold truncate">SDR ProspectFlow</h1>
             <Badge variant="secondary" className="hidden sm:flex gap-1">
               <Check className="h-3 w-3" />
               Playbook Gerado
             </Badge>
           </div>
-          <div className="flex items-center gap-2">
+          
+          {/* Desktop Actions */}
+          <div className="hidden sm:flex items-center gap-2">
             <ExportPDF 
               playbook={playbook} 
               leadCompany={extractedData?.company || 'Lead'} 
@@ -189,13 +199,42 @@ ${playbook.approachScript?.fullText || ''}
               Novo Lead
             </Button>
           </div>
+
+          {/* Mobile Actions */}
+          <div className="flex sm:hidden items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={reset} className="h-9 w-9">
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleCopyAll}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copiar Tudo
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowFeedback(true)}>
+                  <ClipboardCheck className="h-4 w-4 mr-2" />
+                  Dar Feedback
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </header>
 
-      <div className="container px-4 py-6">
+      <div className="container px-3 sm:px-4 py-4 sm:py-6">
+        {/* Mobile Lead Card */}
+        <div className="mb-4 lg:hidden">
+          <MobileLeadCard extractedData={extractedData} />
+        </div>
+
         <div className="flex gap-6">
           
-          {/* Left Sidebar - Lead Context + Navigation - FIXED */}
+          {/* Left Sidebar - Lead Context + Navigation - FIXED (Desktop only) */}
           <aside className="hidden lg:block w-72 flex-shrink-0">
             <div className="sticky top-20 space-y-4">
               {/* Lead Info Card */}
@@ -236,6 +275,7 @@ ${playbook.approachScript?.fullText || ''}
                 <nav className="space-y-1">
                   {sections.map((section) => {
                     const Icon = section.icon;
+                    if (section.id === 'cases' && !hasCases) return null;
                     return (
                       <button
                         key={section.id}
@@ -261,30 +301,30 @@ ${playbook.approachScript?.fullText || ''}
           </aside>
 
           {/* Main Content */}
-          <main className="flex-1 min-w-0 space-y-6">
+          <main className="flex-1 min-w-0 space-y-4 sm:space-y-6">
             
             {/* 1. RESUMO EXECUTIVO */}
-            <Card className="p-6" id="summary">
+            <Card className="p-4 sm:p-6" id="summary">
               <button 
                 onClick={() => toggleSection('summary')}
-                className="flex items-center justify-between w-full text-left mb-4"
+                className="flex items-center justify-between w-full text-left mb-3 sm:mb-4"
               >
-                <h2 className="font-semibold text-lg flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary" />
+                <h2 className="font-semibold text-base sm:text-lg flex items-center gap-2">
+                  <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   1. Resumo Executivo
                 </h2>
                 {expandedSections.summary ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
               </button>
               
               {expandedSections.summary && playbook.executiveSummary && (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                   {[
                     { icon: Building2, label: 'Sobre a Empresa', value: playbook.executiveSummary.companyContext, color: 'text-blue-500' },
                     { icon: User, label: 'Perfil do Lead', value: playbook.executiveSummary.leadProfile, color: 'text-green-500' },
                   ].map((item, i) => {
                     const Icon = item.icon;
                     return (
-                      <div key={i} className="bg-muted/50 rounded-lg p-4 border">
+                      <div key={i} className="bg-muted/50 rounded-lg p-3 sm:p-4 border">
                         <div className="flex items-center gap-2 mb-2">
                           <Icon className={cn('h-4 w-4', item.color)} />
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -300,13 +340,13 @@ ${playbook.approachScript?.fullText || ''}
             </Card>
 
             {/* 2. EVIDÊNCIAS E NOTÍCIAS */}
-            <Card className="p-6" id="evidences">
+            <Card className="p-4 sm:p-6" id="evidences">
               <button
                 onClick={() => toggleSection('evidences')}
-                className="flex items-center justify-between w-full text-left mb-4"
+                className="flex items-center justify-between w-full text-left mb-3 sm:mb-4"
               >
-                <h2 className="font-semibold text-lg flex items-center gap-2">
-                  <ExternalLink className="h-5 w-5 text-blue-500" />
+                <h2 className="font-semibold text-base sm:text-lg flex items-center gap-2">
+                  <ExternalLink className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
                   2. Evidências e Notícias
                   {playbook.evidences && playbook.evidences.length > 0 && (
                     <Badge variant="secondary" className="ml-2">{playbook.evidences.length}</Badge>
@@ -316,36 +356,36 @@ ${playbook.approachScript?.fullText || ''}
               </button>
 
               {expandedSections.evidences && (
-                <div className="space-y-6">
+                <div className="space-y-4 sm:space-y-6">
                   {/* Seção SAP */}
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <Database className="h-5 w-5 text-orange-500" />
-                      <h3 className="font-semibold text-base">Ambiente SAP</h3>
-                      <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300">
-                        {sapEvidences.length} evidências
+                      <Database className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500" />
+                      <h3 className="font-semibold text-sm sm:text-base">Ambiente SAP</h3>
+                      <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 text-xs">
+                        {sapEvidences.length}
                       </Badge>
                     </div>
                     {sapEvidences.length > 0 ? (
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                         {sapEvidences.map((evidence, i) => (
                           <a
                             key={i}
                             href={evidence.link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="block border rounded-lg p-4 hover:bg-orange-50/50 dark:hover:bg-orange-950/20 transition-colors group border-orange-200 dark:border-orange-800"
+                            className="block border rounded-lg p-3 sm:p-4 hover:bg-orange-50/50 dark:hover:bg-orange-950/20 transition-colors group border-orange-200 dark:border-orange-800 active:scale-[0.98]"
                           >
                             <h4 className="font-medium text-sm mb-2 line-clamp-2">{evidence.title}</h4>
                             <p className="text-xs text-muted-foreground mb-3 line-clamp-2">→ {evidence.indication}</p>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <Badge variant="outline" className="text-xs bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-950 dark:text-orange-400">
                                 {evidence.source || 'Web'}
                               </Badge>
                               {evidence.date && (
                                 <span className="text-xs text-muted-foreground">{evidence.date}</span>
                               )}
-                              <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" />
                             </div>
                           </a>
                         ))}
@@ -361,32 +401,32 @@ ${playbook.approachScript?.fullText || ''}
                   {/* Seção Tecnologia */}
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <Server className="h-5 w-5 text-purple-500" />
-                      <h3 className="font-semibold text-base">Ambiente de Tecnologia</h3>
-                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300">
-                        {techEvidences.length} evidências
+                      <Server className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" />
+                      <h3 className="font-semibold text-sm sm:text-base">Ambiente de Tecnologia</h3>
+                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 text-xs">
+                        {techEvidences.length}
                       </Badge>
                     </div>
                     {techEvidences.length > 0 ? (
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                         {techEvidences.map((evidence, i) => (
                           <a
                             key={i}
                             href={evidence.link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="block border rounded-lg p-4 hover:bg-purple-50/50 dark:hover:bg-purple-950/20 transition-colors group border-purple-200 dark:border-purple-800"
+                            className="block border rounded-lg p-3 sm:p-4 hover:bg-purple-50/50 dark:hover:bg-purple-950/20 transition-colors group border-purple-200 dark:border-purple-800 active:scale-[0.98]"
                           >
                             <h4 className="font-medium text-sm mb-2 line-clamp-2">{evidence.title}</h4>
                             <p className="text-xs text-muted-foreground mb-3 line-clamp-2">→ {evidence.indication}</p>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <Badge variant="outline" className="text-xs bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950 dark:text-purple-400">
                                 {evidence.source || 'Web'}
                               </Badge>
                               {evidence.date && (
                                 <span className="text-xs text-muted-foreground">{evidence.date}</span>
                               )}
-                              <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" />
                             </div>
                           </a>
                         ))}
@@ -402,32 +442,32 @@ ${playbook.approachScript?.fullText || ''}
                   {/* Seção LinkedIn */}
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <Linkedin className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-semibold text-base">LinkedIn</h3>
-                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300">
-                        {linkedinEvidences.length} publicações
+                      <Linkedin className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                      <h3 className="font-semibold text-sm sm:text-base">LinkedIn</h3>
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 text-xs">
+                        {linkedinEvidences.length}
                       </Badge>
                     </div>
                     {linkedinEvidences.length > 0 ? (
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                         {linkedinEvidences.map((evidence, i) => (
                           <a
                             key={i}
                             href={evidence.link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="block border rounded-lg p-4 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors group border-blue-200 dark:border-blue-800"
+                            className="block border rounded-lg p-3 sm:p-4 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors group border-blue-200 dark:border-blue-800 active:scale-[0.98]"
                           >
                             <h4 className="font-medium text-sm mb-2 line-clamp-2">{evidence.title}</h4>
                             <p className="text-xs text-muted-foreground mb-3 line-clamp-2">→ {evidence.indication}</p>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-400">
                                 {evidence.source || 'LinkedIn'}
                               </Badge>
                               {evidence.date && (
                                 <span className="text-xs text-muted-foreground">{evidence.date}</span>
                               )}
-                              <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" />
                             </div>
                           </a>
                         ))}
@@ -441,13 +481,13 @@ ${playbook.approachScript?.fullText || ''}
             </Card>
 
             {/* 3. DORES PROVÁVEIS */}
-            <Card className="p-6" id="pains">
+            <Card className="p-4 sm:p-6" id="pains">
               <button 
                 onClick={() => toggleSection('pains')}
-                className="flex items-center justify-between w-full text-left mb-4"
+                className="flex items-center justify-between w-full text-left mb-3 sm:mb-4"
               >
-                <h2 className="font-semibold text-lg flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                <h2 className="font-semibold text-base sm:text-lg flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-destructive" />
                   3. Dores Prováveis
                   <Badge variant="secondary" className="ml-2">{playbook.probablePains?.length || 0}</Badge>
                 </h2>
@@ -461,7 +501,7 @@ ${playbook.approachScript?.fullText || ''}
                       <span className="flex-shrink-0 w-6 h-6 rounded-full bg-destructive/10 text-destructive text-xs font-bold flex items-center justify-center">
                         {i + 1}
                       </span>
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium text-sm">{pain.pain}</p>
                           {pain.confidence && (
@@ -489,13 +529,13 @@ ${playbook.approachScript?.fullText || ''}
             </Card>
 
             {/* 4. COMO A META IT PODE AJUDAR */}
-            <Card className="p-6" id="solutions">
+            <Card className="p-4 sm:p-6" id="solutions">
               <button 
                 onClick={() => toggleSection('solutions')}
-                className="flex items-center justify-between w-full text-left mb-4"
+                className="flex items-center justify-between w-full text-left mb-3 sm:mb-4"
               >
-                <h2 className="font-semibold text-lg flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-primary" />
+                <h2 className="font-semibold text-base sm:text-lg flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   4. Como a Meta IT Pode Ajudar
                   <Badge variant="secondary" className="ml-2">{playbook.metaSolutions?.length || 0}</Badge>
                 </h2>
@@ -503,13 +543,13 @@ ${playbook.approachScript?.fullText || ''}
               </button>
               
               {expandedSections.solutions && (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                   {playbook.metaSolutions?.map((sol, i) => (
                     <div key={i} className="border rounded-lg overflow-hidden">
-                      <div className="bg-destructive/10 px-4 py-2 border-b">
+                      <div className="bg-destructive/10 px-3 sm:px-4 py-2 border-b">
                         <p className="text-xs font-medium text-destructive">Dor: {sol.pain}</p>
                       </div>
-                      <div className="p-4">
+                      <div className="p-3 sm:p-4">
                         <p className="font-semibold text-sm text-primary">{sol.solution}</p>
                         <p className="text-xs text-muted-foreground mt-1">{sol.description}</p>
                       </div>
@@ -520,38 +560,38 @@ ${playbook.approachScript?.fullText || ''}
             </Card>
 
             {/* 5. CASES RELEVANTES */}
-            {playbook.relevantCases && playbook.relevantCases.length > 0 && (
-              <Card className="p-6" id="cases">
+            {hasCases && (
+              <Card className="p-4 sm:p-6" id="cases">
                 <button 
                   onClick={() => toggleSection('cases')}
-                  className="flex items-center justify-between w-full text-left mb-4"
+                  className="flex items-center justify-between w-full text-left mb-3 sm:mb-4"
                 >
-                  <h2 className="font-semibold text-lg flex items-center gap-2">
-                    <Award className="h-5 w-5 text-amber-500" />
+                  <h2 className="font-semibold text-base sm:text-lg flex items-center gap-2">
+                    <Award className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
                     5. Cases Relevantes
-                    <Badge variant="secondary" className="ml-2">{playbook.relevantCases.length}</Badge>
+                    <Badge variant="secondary" className="ml-2">{playbook.relevantCases?.length}</Badge>
                   </h2>
                   {expandedSections.cases ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                 </button>
                 
                 {expandedSections.cases && (
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {playbook.relevantCases.map((caseItem, i) => (
+                  <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                    {playbook.relevantCases?.map((caseItem, i) => (
                       <div key={i} className="border rounded-lg overflow-hidden bg-gradient-to-br from-amber-50/50 to-orange-50/50 dark:from-amber-950/20 dark:to-orange-950/20">
-                        <div className="bg-amber-100/80 dark:bg-amber-900/40 px-4 py-2 border-b border-amber-200 dark:border-amber-800 flex items-center justify-between">
-                          <p className="font-semibold text-sm">{caseItem.company}</p>
+                        <div className="bg-amber-100/80 dark:bg-amber-900/40 px-3 sm:px-4 py-2 border-b border-amber-200 dark:border-amber-800 flex items-center justify-between gap-2">
+                          <p className="font-semibold text-sm truncate">{caseItem.company}</p>
                           {caseItem.score && (
-                            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
-                              {(caseItem.score * 100).toFixed(0)}% match
+                            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300 flex-shrink-0">
+                              {(caseItem.score * 100).toFixed(0)}%
                             </Badge>
                           )}
                         </div>
-                        <div className="p-4 space-y-2">
+                        <div className="p-3 sm:p-4 space-y-2">
                           <p className="text-sm font-medium">{caseItem.title}</p>
                           <p className="text-xs text-muted-foreground">{caseItem.result}</p>
                           <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 pt-2 border-t border-amber-100 dark:border-amber-900">
                             <BarChart3 className="h-3 w-3" />
-                            <span>{caseItem.relevance}</span>
+                            <span className="line-clamp-1">{caseItem.relevance}</span>
                           </div>
                         </div>
                       </div>
@@ -562,13 +602,13 @@ ${playbook.approachScript?.fullText || ''}
             )}
 
             {/* 6. PERGUNTAS DE DISCOVERY */}
-            <Card className="p-6" id="discovery">
+            <Card className="p-4 sm:p-6" id="discovery">
               <button 
                 onClick={() => toggleSection('discovery')}
-                className="flex items-center justify-between w-full text-left mb-4"
+                className="flex items-center justify-between w-full text-left mb-3 sm:mb-4"
               >
-                <h2 className="font-semibold text-lg flex items-center gap-2">
-                  <HelpCircle className="h-5 w-5 text-amber-500" />
+                <h2 className="font-semibold text-base sm:text-lg flex items-center gap-2">
+                  <HelpCircle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
                   6. Perguntas de Discovery
                   <Badge variant="secondary" className="ml-2">12</Badge>
                 </h2>
@@ -577,25 +617,28 @@ ${playbook.approachScript?.fullText || ''}
               
               {expandedSections.discovery && playbook.discoveryQuestions && (
                 <Tabs defaultValue="phase" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3 mb-4">
-                    <TabsTrigger value="phase" className="text-xs">
-                      <Target className="h-3 w-3 mr-1" />
-                      Fase/Prioridades
+                  <TabsList className="w-full grid grid-cols-3 mb-4 h-auto">
+                    <TabsTrigger value="phase" className="text-xs py-2 px-1 sm:px-3">
+                      <Target className="h-3 w-3 sm:mr-1" />
+                      <span className="hidden sm:inline">Fase/Prioridades</span>
+                      <span className="sm:hidden">Fase</span>
                     </TabsTrigger>
-                    <TabsTrigger value="operations" className="text-xs">
-                      <Settings className="h-3 w-3 mr-1" />
-                      Operação
+                    <TabsTrigger value="operations" className="text-xs py-2 px-1 sm:px-3">
+                      <Settings className="h-3 w-3 sm:mr-1" />
+                      <span className="hidden sm:inline">Operação</span>
+                      <span className="sm:hidden">Op.</span>
                     </TabsTrigger>
-                    <TabsTrigger value="qualification" className="text-xs">
-                      <Users className="h-3 w-3 mr-1" />
-                      Qualificação
+                    <TabsTrigger value="qualification" className="text-xs py-2 px-1 sm:px-3">
+                      <Users className="h-3 w-3 sm:mr-1" />
+                      <span className="hidden sm:inline">Qualificação</span>
+                      <span className="sm:hidden">Qual.</span>
                     </TabsTrigger>
                   </TabsList>
                   
                   <TabsContent value="phase" className="space-y-2">
                     {playbook.discoveryQuestions.phaseAndPriorities?.map((q, i) => (
                       <div key={i} className="flex gap-2 items-start bg-muted/50 rounded-lg p-3">
-                        <span className="text-amber-500 font-bold">{i + 1}.</span>
+                        <span className="text-amber-500 font-bold flex-shrink-0">{i + 1}.</span>
                         <p className="text-sm">{q}</p>
                       </div>
                     ))}
@@ -604,7 +647,7 @@ ${playbook.approachScript?.fullText || ''}
                   <TabsContent value="operations" className="space-y-2">
                     {playbook.discoveryQuestions.operationsIntegration?.map((q, i) => (
                       <div key={i} className="flex gap-2 items-start bg-muted/50 rounded-lg p-3">
-                        <span className="text-amber-500 font-bold">{i + 1}.</span>
+                        <span className="text-amber-500 font-bold flex-shrink-0">{i + 1}.</span>
                         <p className="text-sm">{q}</p>
                       </div>
                     ))}
@@ -613,7 +656,7 @@ ${playbook.approachScript?.fullText || ''}
                   <TabsContent value="qualification" className="space-y-2">
                     {playbook.discoveryQuestions.qualification?.map((q, i) => (
                       <div key={i} className="flex gap-2 items-start bg-muted/50 rounded-lg p-3">
-                        <span className="text-amber-500 font-bold">{i + 1}.</span>
+                        <span className="text-amber-500 font-bold flex-shrink-0">{i + 1}.</span>
                         <p className="text-sm">{q}</p>
                       </div>
                     ))}
@@ -622,10 +665,28 @@ ${playbook.approachScript?.fullText || ''}
               )}
             </Card>
 
-
           </main>
         </div>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav 
+        activeSection={activeSection} 
+        onSectionChange={setActiveSection}
+        hasCases={hasCases}
+      />
+
+      {/* Mobile Feedback Dialog */}
+      <Dialog open={showFeedback} onOpenChange={setShowFeedback}>
+        <DialogContent className="p-0 border-0 bg-transparent shadow-none max-w-lg sm:hidden">
+          <FeedbackForm
+            playbookId={playbookId || ''}
+            leadCompany={extractedData?.company || ''}
+            pains={playbook.probablePains || []}
+            onClose={() => setShowFeedback(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

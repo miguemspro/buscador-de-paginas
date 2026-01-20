@@ -86,26 +86,27 @@ export function FeedbackForm({ playbookId, leadCompany, pains, onClose, onSubmit
   };
 
   return (
-    <Card className="w-full max-w-lg">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-lg">Feedback do Contato</CardTitle>
-        <Button variant="ghost" size="icon" onClick={onClose}>
+    <Card className="w-full">
+      <CardHeader className="flex flex-row items-center justify-between p-4 sm:p-6">
+        <CardTitle className="text-base sm:text-lg">Feedback do Contato</CardTitle>
+        <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6 pt-0">
         {/* Dores Confirmadas */}
         <div className="space-y-3">
           <Label className="text-sm font-medium">Dores Confirmadas pelo Lead</Label>
-          <div className="space-y-2 max-h-40 overflow-y-auto">
+          <div className="space-y-2 max-h-32 sm:max-h-40 overflow-y-auto">
             {pains.map((pain, idx) => (
-              <div key={idx} className="flex items-start gap-2">
+              <div key={idx} className="flex items-start gap-3 min-h-[44px]">
                 <Checkbox
                   id={`pain-${idx}`}
                   checked={confirmedPains.includes(pain.pain)}
                   onCheckedChange={() => togglePain(pain.pain)}
+                  className="mt-0.5"
                 />
-                <label htmlFor={`pain-${idx}`} className="text-sm cursor-pointer">
+                <label htmlFor={`pain-${idx}`} className="text-sm cursor-pointer flex-1">
                   {pain.pain}
                 </label>
               </div>
@@ -116,52 +117,46 @@ export function FeedbackForm({ playbookId, leadCompany, pains, onClose, onSubmit
         {/* Case Utilizado */}
         <div className="space-y-3">
           <Label className="text-sm font-medium">O Case Apresentado Foi Útil?</Label>
-          <RadioGroup value={caseUsed} onValueChange={setCaseUsed}>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="util" id="case-util" />
-              <Label htmlFor="case-util" className="text-sm cursor-pointer">Útil e relevante</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="parcial" id="case-parcial" />
-              <Label htmlFor="case-parcial" className="text-sm cursor-pointer">Parcialmente útil</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="nao_util" id="case-nao" />
-              <Label htmlFor="case-nao" className="text-sm cursor-pointer">Não foi útil</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="nao_apresentei" id="case-na" />
-              <Label htmlFor="case-na" className="text-sm cursor-pointer">Não apresentei</Label>
-            </div>
+          <RadioGroup value={caseUsed} onValueChange={setCaseUsed} className="space-y-2">
+            {[
+              { value: 'util', label: 'Útil e relevante' },
+              { value: 'parcial', label: 'Parcialmente útil' },
+              { value: 'nao_util', label: 'Não foi útil' },
+              { value: 'nao_apresentei', label: 'Não apresentei' },
+            ].map((option) => (
+              <div key={option.value} className="flex items-center gap-3 min-h-[44px]">
+                <RadioGroupItem value={option.value} id={`case-${option.value}`} />
+                <Label htmlFor={`case-${option.value}`} className="text-sm cursor-pointer flex-1">
+                  {option.label}
+                </Label>
+              </div>
+            ))}
           </RadioGroup>
         </div>
 
         {/* Resposta do Lead */}
         <div className="space-y-3">
           <Label className="text-sm font-medium">Resposta do Lead</Label>
-          <RadioGroup value={leadResponse} onValueChange={setLeadResponse}>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="positiva" id="resp-pos" />
-              <Label htmlFor="resp-pos" className="text-sm cursor-pointer">Positiva - interesse</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="neutra" id="resp-neu" />
-              <Label htmlFor="resp-neu" className="text-sm cursor-pointer">Neutra - talvez futuro</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="negativa" id="resp-neg" />
-              <Label htmlFor="resp-neg" className="text-sm cursor-pointer">Negativa - sem interesse</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="sem_resposta" id="resp-sr" />
-              <Label htmlFor="resp-sr" className="text-sm cursor-pointer">Sem resposta</Label>
-            </div>
+          <RadioGroup value={leadResponse} onValueChange={setLeadResponse} className="space-y-2">
+            {[
+              { value: 'positiva', label: 'Positiva - interesse' },
+              { value: 'neutra', label: 'Neutra - talvez futuro' },
+              { value: 'negativa', label: 'Negativa - sem interesse' },
+              { value: 'sem_resposta', label: 'Sem resposta' },
+            ].map((option) => (
+              <div key={option.value} className="flex items-center gap-3 min-h-[44px]">
+                <RadioGroupItem value={option.value} id={`resp-${option.value}`} />
+                <Label htmlFor={`resp-${option.value}`} className="text-sm cursor-pointer flex-1">
+                  {option.label}
+                </Label>
+              </div>
+            ))}
           </RadioGroup>
         </div>
 
         {/* Meeting Agendado */}
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 min-h-[44px]">
             <Checkbox
               id="meeting"
               checked={meetingBooked}
@@ -175,12 +170,12 @@ export function FeedbackForm({ playbookId, leadCompany, pains, onClose, onSubmit
           {meetingBooked && (
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-start text-left">
+                <Button variant="outline" className="w-full justify-start text-left h-11">
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {meetingDate ? format(meetingDate, 'PPP', { locale: ptBR }) : 'Selecionar data'}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
+              <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="single"
                   selected={meetingDate}
@@ -207,7 +202,7 @@ export function FeedbackForm({ playbookId, leadCompany, pains, onClose, onSubmit
         <Button 
           onClick={handleSubmit} 
           disabled={isSubmitting}
-          className="w-full"
+          className="w-full h-11"
         >
           <Send className="h-4 w-4 mr-2" />
           {isSubmitting ? 'Enviando...' : 'Enviar Feedback'}

@@ -5,12 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { MetaSolution, SOLUTION_CATEGORIES } from '@/types/admin.types';
 import SolutionForm from '@/components/Admin/SolutionForm';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+import { FloatingActionButton } from '@/components/ui/floating-action-button';
 
 export default function SolucoesPage() {
   const [solutions, setSolutions] = useState<MetaSolution[]>([]);
@@ -76,21 +77,21 @@ export default function SolucoesPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-between items-start sm:items-center">
         <div>
-          <h2 className="text-2xl font-bold">Soluções Meta IT</h2>
-          <p className="text-muted-foreground">{solutions.length} soluções cadastradas</p>
+          <h2 className="text-xl sm:text-2xl font-bold">Soluções Meta IT</h2>
+          <p className="text-sm text-muted-foreground">{solutions.length} soluções cadastradas</p>
         </div>
-        <Button onClick={() => setIsFormOpen(true)} className="gap-2">
+        <Button onClick={() => setIsFormOpen(true)} className="gap-2 hidden sm:flex">
           <Plus className="h-4 w-4" />
           Nova Solução
         </Button>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -116,21 +117,21 @@ export default function SolucoesPage() {
 
       {/* Solutions Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {[1, 2, 3].map((i) => (
             <Card key={i} className="animate-pulse">
-              <CardHeader className="space-y-2">
+              <CardHeader className="space-y-2 p-4 sm:p-6">
                 <div className="h-5 bg-muted rounded w-3/4" />
                 <div className="h-4 bg-muted rounded w-1/2" />
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 sm:p-6 pt-0">
                 <div className="h-20 bg-muted rounded" />
               </CardContent>
             </Card>
           ))}
         </div>
       ) : filteredSolutions.length === 0 ? (
-        <Card className="p-8 text-center">
+        <Card className="p-6 sm:p-8 text-center">
           <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <p className="text-muted-foreground">
             {search || categoryFilter !== 'all' 
@@ -144,15 +145,15 @@ export default function SolucoesPage() {
           )}
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {filteredSolutions.map((solution) => (
             <Card key={solution.id} className="group hover:shadow-md transition-shadow">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-2 p-4 sm:p-6">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Package className="h-4 w-4 text-primary" />
-                      {solution.name}
+                      <Package className="h-4 w-4 text-primary flex-shrink-0" />
+                      <span className="truncate">{solution.name}</span>
                     </CardTitle>
                     <p className="text-sm text-muted-foreground capitalize">{solution.category}</p>
                   </div>
@@ -161,7 +162,7 @@ export default function SolucoesPage() {
                   </Badge>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-3 p-4 sm:p-6 pt-0">
                 <p className="text-sm text-muted-foreground line-clamp-2">
                   {solution.description}
                 </p>
@@ -187,11 +188,13 @@ export default function SolucoesPage() {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between pt-2 border-t opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Actions - Always visible on mobile, hover on desktop */}
+                <div className="flex items-center justify-between pt-2 border-t opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   <div className="flex gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="h-9 w-9 p-0"
                       onClick={() => {
                         setEditingSolution(solution);
                         setIsFormOpen(true);
@@ -202,6 +205,7 @@ export default function SolucoesPage() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="h-9 w-9 p-0"
                       onClick={() => setDeletingSolution(solution)}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -214,31 +218,34 @@ export default function SolucoesPage() {
         </div>
       )}
 
-      {/* Form Dialog */}
-      <Dialog open={isFormOpen} onOpenChange={(open) => {
-        setIsFormOpen(open);
-        if (!open) setEditingSolution(null);
-      }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingSolution ? 'Editar Solução' : 'Nova Solução'}
-            </DialogTitle>
-          </DialogHeader>
-          <SolutionForm
-            initialData={editingSolution}
-            onSuccess={handleFormSuccess}
-            onCancel={() => {
-              setIsFormOpen(false);
-              setEditingSolution(null);
-            }}
-          />
-        </DialogContent>
-      </Dialog>
+      {/* FAB for mobile */}
+      <FloatingActionButton onClick={() => setIsFormOpen(true)}>
+        <Plus className="h-6 w-6" />
+      </FloatingActionButton>
+
+      {/* Form Dialog/Sheet */}
+      <ResponsiveDialog
+        open={isFormOpen}
+        onOpenChange={(open) => {
+          setIsFormOpen(open);
+          if (!open) setEditingSolution(null);
+        }}
+        title={editingSolution ? 'Editar Solução' : 'Nova Solução'}
+        className="max-w-3xl"
+      >
+        <SolutionForm
+          initialData={editingSolution}
+          onSuccess={handleFormSuccess}
+          onCancel={() => {
+            setIsFormOpen(false);
+            setEditingSolution(null);
+          }}
+        />
+      </ResponsiveDialog>
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deletingSolution} onOpenChange={(open) => !open && setDeletingSolution(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir Solução?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -246,9 +253,9 @@ export default function SolucoesPage() {
               Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel className="w-full sm:w-auto">Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="w-full sm:w-auto bg-destructive text-destructive-foreground">
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>

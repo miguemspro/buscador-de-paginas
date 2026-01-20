@@ -5,12 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { MetaCase, INDUSTRIES } from '@/types/admin.types';
 import CaseForm from '@/components/Admin/CaseForm';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+import { FloatingActionButton } from '@/components/ui/floating-action-button';
 
 export default function CasesPage() {
   const [cases, setCases] = useState<MetaCase[]>([]);
@@ -77,21 +78,21 @@ export default function CasesPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-between items-start sm:items-center">
         <div>
-          <h2 className="text-2xl font-bold">Cases Meta IT</h2>
-          <p className="text-muted-foreground">{cases.length} cases cadastrados</p>
+          <h2 className="text-xl sm:text-2xl font-bold">Cases Meta IT</h2>
+          <p className="text-sm text-muted-foreground">{cases.length} cases cadastrados</p>
         </div>
-        <Button onClick={() => setIsFormOpen(true)} className="gap-2">
+        <Button onClick={() => setIsFormOpen(true)} className="gap-2 hidden sm:flex">
           <Plus className="h-4 w-4" />
           Novo Case
         </Button>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -117,21 +118,21 @@ export default function CasesPage() {
 
       {/* Cases Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {[1, 2, 3].map((i) => (
             <Card key={i} className="animate-pulse">
-              <CardHeader className="space-y-2">
+              <CardHeader className="space-y-2 p-4 sm:p-6">
                 <div className="h-5 bg-muted rounded w-3/4" />
                 <div className="h-4 bg-muted rounded w-1/2" />
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 sm:p-6 pt-0">
                 <div className="h-20 bg-muted rounded" />
               </CardContent>
             </Card>
           ))}
         </div>
       ) : filteredCases.length === 0 ? (
-        <Card className="p-8 text-center">
+        <Card className="p-6 sm:p-8 text-center">
           <p className="text-muted-foreground">
             {search || industryFilter !== 'all' 
               ? 'Nenhum case encontrado com esses filtros'
@@ -144,10 +145,10 @@ export default function CasesPage() {
           )}
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {filteredCases.map((caseItem) => (
             <Card key={caseItem.id} className="group hover:shadow-md transition-shadow">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-2 p-4 sm:p-6">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <CardTitle className="text-base truncate">{caseItem.company_name}</CardTitle>
@@ -158,7 +159,7 @@ export default function CasesPage() {
                   </Badge>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-3 p-4 sm:p-6 pt-0">
                 <p className="text-sm font-medium line-clamp-2">{caseItem.title}</p>
                 <p className="text-xs text-muted-foreground line-clamp-2">
                   {caseItem.description}
@@ -185,11 +186,13 @@ export default function CasesPage() {
                   </p>
                 )}
 
-                <div className="flex items-center justify-between pt-2 border-t opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Actions - Always visible on mobile, hover on desktop */}
+                <div className="flex items-center justify-between pt-2 border-t opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   <div className="flex gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="h-9 w-9 p-0"
                       onClick={() => {
                         setEditingCase(caseItem);
                         setIsFormOpen(true);
@@ -200,13 +203,14 @@ export default function CasesPage() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="h-9 w-9 p-0"
                       onClick={() => setDeletingCase(caseItem)}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
                   {caseItem.case_url && (
-                    <Button variant="ghost" size="sm" asChild>
+                    <Button variant="ghost" size="sm" className="h-9 w-9 p-0" asChild>
                       <a href={caseItem.case_url} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="h-4 w-4" />
                       </a>
@@ -219,31 +223,34 @@ export default function CasesPage() {
         </div>
       )}
 
-      {/* Form Dialog */}
-      <Dialog open={isFormOpen} onOpenChange={(open) => {
-        setIsFormOpen(open);
-        if (!open) setEditingCase(null);
-      }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingCase ? 'Editar Case' : 'Novo Case'}
-            </DialogTitle>
-          </DialogHeader>
-          <CaseForm
-            initialData={editingCase}
-            onSuccess={handleFormSuccess}
-            onCancel={() => {
-              setIsFormOpen(false);
-              setEditingCase(null);
-            }}
-          />
-        </DialogContent>
-      </Dialog>
+      {/* FAB for mobile */}
+      <FloatingActionButton onClick={() => setIsFormOpen(true)}>
+        <Plus className="h-6 w-6" />
+      </FloatingActionButton>
+
+      {/* Form Dialog/Sheet */}
+      <ResponsiveDialog
+        open={isFormOpen}
+        onOpenChange={(open) => {
+          setIsFormOpen(open);
+          if (!open) setEditingCase(null);
+        }}
+        title={editingCase ? 'Editar Case' : 'Novo Case'}
+        className="max-w-3xl"
+      >
+        <CaseForm
+          initialData={editingCase}
+          onSuccess={handleFormSuccess}
+          onCancel={() => {
+            setIsFormOpen(false);
+            setEditingCase(null);
+          }}
+        />
+      </ResponsiveDialog>
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deletingCase} onOpenChange={(open) => !open && setDeletingCase(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir Case?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -251,9 +258,9 @@ export default function CasesPage() {
               Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel className="w-full sm:w-auto">Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="w-full sm:w-auto bg-destructive text-destructive-foreground">
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
