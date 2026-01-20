@@ -44,7 +44,7 @@ export default function LoginPage() {
           <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
             <Building2 className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Admin Meta IT</CardTitle>
+          <CardTitle className="text-2xl">M.i.A</CardTitle>
           <CardDescription>
             Faça login para acessar o painel administrativo
           </CardDescription>
