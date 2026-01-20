@@ -670,16 +670,13 @@ ${playbook.approachScript?.fullText || ''}
             </Card>
 
           </main>
+
+          {/* Right Sidebar - Chat (Desktop only) */}
+          <aside className="hidden xl:block w-96 flex-shrink-0">
+            <PlaybookChat playbook={playbook} extractedData={extractedData} />
+          </aside>
         </div>
       </div>
-
-      {/* Floating Chat Button (Desktop) */}
-      <button
-        onClick={() => setShowMobileChat(true)}
-        className="hidden lg:flex fixed bottom-6 right-6 z-50 h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-all hover:scale-105"
-      >
-        <MessageCircle className="h-6 w-6" />
-      </button>
 
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav 
@@ -689,15 +686,9 @@ ${playbook.approachScript?.fullText || ''}
         onChatClick={() => setShowMobileChat(true)}
       />
 
-      {/* Chat Sheet (Mobile: bottom, Desktop: right side) */}
+      {/* Mobile Chat Sheet */}
       <Sheet open={showMobileChat} onOpenChange={setShowMobileChat}>
-        <SheetContent 
-          side={isMobile ? "bottom" : "right"} 
-          className={cn(
-            "p-0",
-            isMobile ? "h-[85vh]" : "w-[400px] sm:w-[450px]"
-          )}
-        >
+        <SheetContent side="bottom" className="h-[85vh] p-0">
           <SheetHeader className="sr-only">
             <SheetTitle>Assistente de Chat</SheetTitle>
           </SheetHeader>
