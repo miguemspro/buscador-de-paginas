@@ -43,7 +43,7 @@ import { ExportPDF } from './ExportPDF';
 import { FeedbackForm } from '@/components/Feedback/FeedbackForm';
 import { MobileBottomNav, type SectionId } from './MobileBottomNav';
 import { MobileLeadCard } from './MobileLeadCard';
-import { PlaybookChat } from './PlaybookChat';
+
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
@@ -52,7 +52,7 @@ export default function PlaybookView() {
   const [copiedScript, setCopiedScript] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>('summary');
   const [showFeedback, setShowFeedback] = useState(false);
-  const [showMobileChat, setShowMobileChat] = useState(false);
+  
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     summary: true,
     evidences: true,
@@ -154,7 +154,7 @@ ${playbook.approachScript?.fullText || ''}
     { id: 'solutions' as SectionId, label: 'Soluções', icon: Sparkles },
     { id: 'cases' as SectionId, label: 'Cases', icon: Award },
     { id: 'discovery' as SectionId, label: 'Discovery', icon: HelpCircle },
-    { id: 'chat' as SectionId, label: 'Chat', icon: MessageCircle },
+    
   ];
 
   return (
@@ -279,7 +279,6 @@ ${playbook.approachScript?.fullText || ''}
                   {sections.map((section) => {
                     const Icon = section.icon;
                     if (section.id === 'cases' && !hasCases) return null;
-                    if (section.id === 'chat') return null; // Chat is on the right side
                     return (
                       <button
                         key={section.id}
@@ -671,10 +670,6 @@ ${playbook.approachScript?.fullText || ''}
 
           </main>
 
-          {/* Right Sidebar - Chat (Desktop only) */}
-          <aside className="hidden xl:block w-96 flex-shrink-0">
-            <PlaybookChat playbook={playbook} extractedData={extractedData} />
-          </aside>
         </div>
       </div>
 
@@ -683,18 +678,7 @@ ${playbook.approachScript?.fullText || ''}
         activeSection={activeSection} 
         onSectionChange={setActiveSection}
         hasCases={hasCases}
-        onChatClick={() => setShowMobileChat(true)}
       />
-
-      {/* Mobile Chat Sheet */}
-      <Sheet open={showMobileChat} onOpenChange={setShowMobileChat}>
-        <SheetContent side="bottom" className="h-[85vh] p-0">
-          <SheetHeader className="sr-only">
-            <SheetTitle>Assistente de Chat</SheetTitle>
-          </SheetHeader>
-          <PlaybookChat playbook={playbook} extractedData={extractedData} />
-        </SheetContent>
-      </Sheet>
 
       {/* Mobile Feedback Dialog */}
       <Dialog open={showFeedback} onOpenChange={setShowFeedback}>

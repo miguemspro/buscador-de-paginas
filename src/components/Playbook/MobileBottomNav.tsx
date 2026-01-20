@@ -4,18 +4,16 @@ import {
   AlertTriangle, 
   Sparkles, 
   Award, 
-  HelpCircle,
-  MessageCircle
+  HelpCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type SectionId = 'summary' | 'evidences' | 'pains' | 'solutions' | 'cases' | 'discovery' | 'chat';
+export type SectionId = 'summary' | 'evidences' | 'pains' | 'solutions' | 'cases' | 'discovery';
 
 interface MobileBottomNavProps {
   activeSection: SectionId;
   onSectionChange: (section: SectionId) => void;
   hasCases?: boolean;
-  onChatClick?: () => void;
 }
 
 const sections = [
@@ -25,18 +23,12 @@ const sections = [
   { id: 'solutions' as SectionId, label: 'Soluções', icon: Sparkles },
   { id: 'cases' as SectionId, label: 'Cases', icon: Award },
   { id: 'discovery' as SectionId, label: 'Discovery', icon: HelpCircle },
-  { id: 'chat' as SectionId, label: 'Chat', icon: MessageCircle },
 ];
 
-export function MobileBottomNav({ activeSection, onSectionChange, hasCases = true, onChatClick }: MobileBottomNavProps) {
-  let visibleSections = hasCases ? sections : sections.filter(s => s.id !== 'cases');
+export function MobileBottomNav({ activeSection, onSectionChange, hasCases = true }: MobileBottomNavProps) {
+  const visibleSections = hasCases ? sections : sections.filter(s => s.id !== 'cases');
 
   const handleClick = (sectionId: SectionId) => {
-    if (sectionId === 'chat' && onChatClick) {
-      onChatClick();
-      onSectionChange(sectionId);
-      return;
-    }
     onSectionChange(sectionId);
     document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
   };
