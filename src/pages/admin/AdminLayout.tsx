@@ -1,7 +1,9 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { Briefcase, Package, ChevronLeft, Home } from 'lucide-react';
+import { Briefcase, Package, ChevronLeft, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 const navItems = [
   { href: '/admin/cases', label: 'Cases', icon: Briefcase },
@@ -10,6 +12,12 @@ const navItems = [
 
 export default function AdminLayout() {
   const location = useLocation();
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast.success('Logout realizado com sucesso');
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -29,12 +37,16 @@ export default function AdminLayout() {
               <p className="text-xs text-muted-foreground hidden sm:block">Gerenciamento de dados</p>
             </div>
           </div>
-          <Link to="/">
-            <Button variant="outline" size="sm" className="gap-1 sm:gap-2 px-2 sm:px-3">
-              <Home className="h-4 w-4" />
-              <span className="hidden sm:inline">Home</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground hidden md:flex items-center gap-1">
+              <User className="h-3 w-3" />
+              {user?.email}
+            </span>
+            <Button variant="outline" size="sm" className="gap-1 sm:gap-2 px-2 sm:px-3" onClick={handleSignOut}>
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sair</span>
             </Button>
-          </Link>
+          </div>
         </div>
       </header>
 
