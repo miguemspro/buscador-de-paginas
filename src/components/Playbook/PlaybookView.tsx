@@ -35,22 +35,24 @@ import {
   BarChart3,
   ClipboardCheck,
   MoreVertical,
+  MessageCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ExportPDF } from './ExportPDF';
 import { FeedbackForm } from '@/components/Feedback/FeedbackForm';
-import { MobileBottomNav } from './MobileBottomNav';
+import { MobileBottomNav, type SectionId } from './MobileBottomNav';
 import { MobileLeadCard } from './MobileLeadCard';
+import { PlaybookChat } from './PlaybookChat';
 import { useIsMobile } from '@/hooks/use-mobile';
-
-type SectionId = 'summary' | 'evidences' | 'pains' | 'solutions' | 'cases' | 'discovery';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 export default function PlaybookView() {
   const { playbook, extractedData, reset, playbookId } = usePlaybookStore();
   const [copiedScript, setCopiedScript] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>('summary');
   const [showFeedback, setShowFeedback] = useState(false);
+  const [showMobileChat, setShowMobileChat] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     summary: true,
     evidences: true,
@@ -152,6 +154,7 @@ ${playbook.approachScript?.fullText || ''}
     { id: 'solutions' as SectionId, label: 'Soluções', icon: Sparkles },
     { id: 'cases' as SectionId, label: 'Cases', icon: Award },
     { id: 'discovery' as SectionId, label: 'Discovery', icon: HelpCircle },
+    { id: 'chat' as SectionId, label: 'Chat', icon: MessageCircle },
   ];
 
   return (
@@ -235,7 +238,7 @@ ${playbook.approachScript?.fullText || ''}
         <div className="flex gap-6">
           
           {/* Left Sidebar - Lead Context + Navigation - FIXED (Desktop only) */}
-          <aside className="hidden lg:block w-72 flex-shrink-0">
+          <aside className="hidden lg:block w-64 flex-shrink-0">
             <div className="sticky top-20 space-y-4">
               {/* Lead Info Card */}
               <Card className="p-5">
@@ -276,6 +279,7 @@ ${playbook.approachScript?.fullText || ''}
                   {sections.map((section) => {
                     const Icon = section.icon;
                     if (section.id === 'cases' && !hasCases) return null;
+                    if (section.id === 'chat') return null; // Chat is on the right side
                     return (
                       <button
                         key={section.id}
@@ -666,6 +670,11 @@ ${playbook.approachScript?.fullText || ''}
             </Card>
 
           </main>
+
+          {/* Right Sidebar - Chat (Desktop only) */}
+          <aside className="hidden xl:block w-96 flex-shrink-0">
+            <PlaybookChat playbook={playbook} extractedData={extractedData} />
+          </aside>
         </div>
       </div>
 
@@ -674,7 +683,18 @@ ${playbook.approachScript?.fullText || ''}
         activeSection={activeSection} 
         onSectionChange={setActiveSection}
         hasCases={hasCases}
+        onChatClick={() => setShowMobileChat(true)}
       />
+
+      {/* Mobile Chat Sheet */}
+      <Sheet open={showMobileChat} onOpenChange={setShowMobileChat}>
+        <SheetContent side="bottom" className="h-[85vh] p-0">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Assistente de Chat</SheetTitle>
+          </SheetHeader>
+          <PlaybookChat playbook={playbook} extractedData={extractedData} />
+        </SheetContent>
+      </Sheet>
 
       {/* Mobile Feedback Dialog */}
       <Dialog open={showFeedback} onOpenChange={setShowFeedback}>

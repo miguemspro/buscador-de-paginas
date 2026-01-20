@@ -24,3 +24,6 @@ verify_jwt = false
 
 [functions.admin-solutions]
 verify_jwt = false
+
+[functions.playbook-chat]
+verify_jwt = false
