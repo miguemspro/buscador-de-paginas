@@ -20,21 +20,25 @@ serve(async (req) => {
 
     console.log("Extraindo dados do print do Salesforce...");
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Analise este print do Salesforce e extraia TODOS os dados do lead visíveis.
+    // Função para fazer a chamada com retry
+    const callAIWithRetry = async (maxRetries = 3): Promise<Response> => {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash",
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    {
+                      type: "text",
+                      text: `Analise este print do Salesforce e extraia TODOS os dados do lead visíveis.
 
 Retorne um JSON com esta estrutura exata:
 {
@@ -59,40 +63,78 @@ IMPORTANTE:
 - Para sapStatus, procure por campos como "Ritmo atual", "SAP Status", etc.
 - Infira industry e companySize baseado no nome da empresa se necessário
 - Retorne APENAS o JSON, sem markdown ou explicação`
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: imageBase64
+                    },
+                    {
+                      type: "image_url",
+                      image_url: {
+                        url: imageBase64
+                      }
+                    }
+                  ]
                 }
-              }
-            ]
-          }
-        ],
-        max_tokens: 1000,
-      }),
-    });
+              ],
+              max_tokens: 1000,
+            }),
+          });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Erro da API:", response.status, errorText);
-      
-      if (response.status === 429) {
+          // Se sucesso, retorna
+          if (response.ok) {
+            return response;
+          }
+
+          // Erros específicos que não devem retry
+          if (response.status === 429) {
+            throw { status: 429, message: "Limite de requisições excedido. Tente novamente em alguns segundos." };
+          }
+          if (response.status === 402) {
+            throw { status: 402, message: "Créditos insuficientes. Adicione créditos em Settings → Workspace → Usage." };
+          }
+
+          // Para erros 5xx, fazer retry
+          if (response.status >= 500 && attempt < maxRetries) {
+            const errorText = await response.text();
+            console.warn(`Tentativa ${attempt}/${maxRetries} falhou (${response.status}). Tentando novamente...`);
+            await new Promise(r => setTimeout(r, 1000 * attempt)); // Backoff exponencial
+            continue;
+          }
+
+          // Última tentativa falhou
+          const errorText = await response.text();
+          console.error("Erro da API após retries:", response.status, errorText);
+          throw new Error(`Erro na API após ${maxRetries} tentativas: ${response.status}`);
+          
+        } catch (fetchError) {
+          // Erro de rede - fazer retry
+          if (attempt < maxRetries && !(fetchError as any).status) {
+            console.warn(`Tentativa ${attempt}/${maxRetries} - erro de rede. Tentando novamente...`);
+            await new Promise(r => setTimeout(r, 1000 * attempt));
+            continue;
+          }
+          throw fetchError;
+        }
+      }
+      throw new Error("Falha após todas as tentativas");
+    };
+
+    let response;
+    try {
+      response = await callAIWithRetry(3);
+    } catch (err: any) {
+      if (err.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }),
+          JSON.stringify({ error: err.message }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
-      if (response.status === 402) {
+      if (err.status === 402) {
         return new Response(
-          JSON.stringify({ error: "Créditos insuficientes. Adicione créditos em Settings → Workspace → Usage." }),
+          JSON.stringify({ error: err.message }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
-      throw new Error(`Erro na API: ${response.status}`);
+      throw err;
     }
+
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
