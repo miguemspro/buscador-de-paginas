@@ -138,7 +138,7 @@ async function rankCasesBySimilarity(
   const rankedCases: RankedCase[] = [];
 
   for (const caseItem of allCases) {
-    let score = 0;
+    let score = 0.1; // Score base para todos os cases (garante que sempre apareçam)
     const matchReasons: string[] = [];
 
     // 1. Match de setor (peso 0.4)
@@ -146,17 +146,17 @@ async function rankCasesBySimilarity(
     const caseIndustry = (caseItem.industry || '').toLowerCase();
     
     // Match exato de indústria
-    if (caseIndustry === lowerIndustry) {
+    if (lowerIndustry && caseIndustry === lowerIndustry) {
       score += 0.4;
       matchReasons.push(`Mesmo setor: ${caseItem.industry}`);
     }
     // Match por keywords
-    else if (keywords.some((kw: string) => lowerIndustry.includes(kw.toLowerCase()) || kw.toLowerCase().includes(lowerIndustry))) {
+    else if (lowerIndustry && keywords.some((kw: string) => lowerIndustry.includes(kw.toLowerCase()) || kw.toLowerCase().includes(lowerIndustry))) {
       score += 0.3;
       matchReasons.push(`Setor similar: ${caseItem.industry}`);
     }
     // Match parcial
-    else if (caseIndustry.includes(lowerIndustry.split('/')[0]) || lowerIndustry.includes(caseIndustry.split('/')[0])) {
+    else if (lowerIndustry && caseIndustry.includes(lowerIndustry.split('/')[0]) || lowerIndustry.includes(caseIndustry.split('/')[0])) {
       score += 0.2;
       matchReasons.push(`Setor relacionado: ${caseItem.industry}`);
     }
@@ -189,13 +189,17 @@ async function rankCasesBySimilarity(
       }
     }
 
-    if (score > 0) {
-      rankedCases.push({ case: caseItem, score, matchReasons });
+    // Se não houve match específico, adicionar razão genérica
+    if (matchReasons.length === 0) {
+      matchReasons.push(`Case de sucesso: ${caseItem.industry}`);
     }
+
+    rankedCases.push({ case: caseItem, score, matchReasons });
   }
 
   // Ordenar por score e retornar top 3
   rankedCases.sort((a, b) => b.score - a.score);
+  console.log(`Top 3 cases selecionados:`, rankedCases.slice(0, 3).map(c => `${c.case.company_name} (${c.score})`));
   return rankedCases.slice(0, 3);
 }
 
