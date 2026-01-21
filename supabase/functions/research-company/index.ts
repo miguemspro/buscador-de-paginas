@@ -146,29 +146,84 @@ function calculateRelevanceScore(
   const titleLower = evidence.title.toLowerCase();
   const indicationLower = evidence.indication.toLowerCase();
   const linkLower = evidence.link.toLowerCase();
+  const fullTextLower = `${titleLower} ${indicationLower}`;
   
   // 1. Título menciona a empresa? (+30 pontos)
   if (titleLower.includes(companyLower) || indicationLower.includes(companyLower)) {
     score += 30;
   }
   
-  // 2. Conteúdo relacionado à categoria? (+40 pontos)
+  // Keywords relevantes para prospecção SAP/tecnologia empresarial
+  const sapRelevantKeywords = [
+    // SAP Core
+    'sap', 's/4hana', 's4hana', 'hana', 'erp', 'fiori', 'abap', 'basis',
+    // Projetos SAP
+    'migração', 'implementação', 'go-live', 'rollout', 'projeto', 'deploy',
+    // Tecnologia empresarial
+    'transformação digital', 'sistema', 'integração', 'cloud', 'aws', 'azure',
+    'automação', 'processos', 'gestão', 'supply chain', 'logística', 'wms',
+    'btp', 'integration suite', 'cpi', 'ariba', 'successfactors', 'concur',
+    // Termos de negócio B2B
+    'parceria', 'projeto', 'consultoria', 'tecnologia', 'inovação', 'digital'
+  ];
+  
+  // Keywords que indicam conteúdo IRRELEVANTE para prospecção B2B SAP
+  const irrelevantKeywords = [
+    // RH/Institucional
+    'gptw', 'great place to work', 'melhor empresa para trabalhar',
+    'melhores empresas', 'certificação empresa',
+    // Eventos não técnicos
+    'reinauguração', 'inauguração', 'aniversário', 'celebração', 'festa',
+    'comemorando', 'anos de empresa', 'jubileu',
+    // Jurídico/Compliance
+    'ab2l', 'jurídico', 'juridico', 'advogado', 'advocacia', 'compliance legal',
+    // Vagas genéricas
+    'estamos contratando', 'vaga aberta', 'oportunidade de emprego',
+    'venha fazer parte', 'processo seletivo',
+    // Premiações não técnicas  
+    'prêmio rh', 'diversidade', 'inclusão', 'sustentabilidade social',
+    // Datas comemorativas
+    'feliz natal', 'feliz ano novo', 'boas festas', 'páscoa', 'dia das mães',
+    'dia dos pais', 'dia do trabalhador',
+    // Conteúdo genérico de marca
+    'somos a melhor', 'orgulho de ser', 'time incrível', 'equipe fantástica'
+  ];
+  
+  // 2. Conteúdo relacionado à categoria? (+40 pontos base, ajustado por contexto)
   if (category === 'sap') {
-    const sapKeywords = ['sap', 's/4hana', 's4hana', 'hana', 'erp', 'fiori', 'abap', 'basis', 'migração sap', 'projeto sap'];
-    if (sapKeywords.some(kw => titleLower.includes(kw) || indicationLower.includes(kw))) {
+    if (sapRelevantKeywords.some(kw => fullTextLower.includes(kw))) {
       score += 40;
     }
   } else if (category === 'tech') {
     const techKeywords = ['cloud', 'aws', 'azure', 'gcp', 'transformação digital', 'data lake', 'integração', 'api', 'tecnologia', 'ti', 'infraestrutura'];
-    // Excluir SAP para tech
-    const hasSap = ['sap', 's/4hana', 's4hana'].some(kw => titleLower.includes(kw));
-    if (!hasSap && techKeywords.some(kw => titleLower.includes(kw) || indicationLower.includes(kw))) {
+    const hasSap = ['sap', 's/4hana', 's4hana'].some(kw => fullTextLower.includes(kw));
+    if (!hasSap && techKeywords.some(kw => fullTextLower.includes(kw))) {
       score += 40;
     }
   } else if (category === 'linkedin') {
-    // Para LinkedIn, o link é o principal indicador
+    // LinkedIn: validar DOMÍNIO + CONTEÚDO RELACIONADO AO SERVIÇO
     if (linkLower.includes('linkedin.com')) {
-      score += 40;
+      score += 15; // Base reduzida para LinkedIn (era 40)
+      
+      // BÔNUS: Conteúdo menciona termos SAP/tecnologia empresarial (+35)
+      const hasSapContent = sapRelevantKeywords.some(kw => fullTextLower.includes(kw));
+      if (hasSapContent) {
+        score += 35;
+        console.log(`✅ LinkedIn relevante (SAP/tech): "${evidence.title.substring(0, 50)}..."`);
+      }
+      
+      // PENALIDADE: Conteúdo irrelevante para prospecção (-40)
+      const hasIrrelevantContent = irrelevantKeywords.some(kw => fullTextLower.includes(kw));
+      if (hasIrrelevantContent) {
+        score -= 40;
+        console.log(`🚫 LinkedIn penalizado (irrelevante): "${evidence.title.substring(0, 50)}..."`);
+      }
+      
+      // BÔNUS MENOR: É post/publicação específica (+10)
+      const isPost = linkLower.includes('/posts/') || linkLower.includes('/feed/update/') || linkLower.includes('/pulse/');
+      if (isPost) {
+        score += 10;
+      }
     }
   }
   
