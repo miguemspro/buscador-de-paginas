@@ -27,3 +27,6 @@ verify_jwt = false
 
 [functions.playbook-chat]
 verify_jwt = false
+
+[functions.enrich-lead-profile]
+verify_jwt = false

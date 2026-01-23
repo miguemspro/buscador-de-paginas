@@ -606,6 +606,50 @@ serve(async (req) => {
       console.warn('Erro ao buscar evidências:', researchError);
     }
 
+    // ============================================
+    // ENRIQUECER PERFIL DO LEAD VIA LINKEDIN (APIFY)
+    // ============================================
+    let enrichedLeadProfile: {
+      focus?: string;
+      focusEmoji?: string;
+      focusDetails?: string;
+      approachSuggestion?: string;
+      keyInsights?: string[];
+      sapRelevance?: string[];
+      enriched: boolean;
+    } = { enriched: false };
+
+    if (leadData.linkedinUrl || leadProfile.linkedinUrl) {
+      const linkedinUrl = leadData.linkedinUrl || leadProfile.linkedinUrl;
+      console.log('Enriquecendo perfil do lead via LinkedIn:', linkedinUrl);
+      
+      try {
+        const enrichResponse = await fetch(`${supabaseUrl}/functions/v1/enrich-lead-profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ linkedinUrl })
+        });
+
+        if (enrichResponse.ok) {
+          const enrichData = await enrichResponse.json();
+          if (enrichData.enriched) {
+            enrichedLeadProfile = {
+              focus: enrichData.focus,
+              focusEmoji: enrichData.focusEmoji,
+              focusDetails: enrichData.focusDetails,
+              approachSuggestion: enrichData.approachSuggestion,
+              keyInsights: enrichData.keyInsights,
+              sapRelevance: enrichData.sapRelevance,
+              enriched: true
+            };
+            console.log('Perfil enriquecido:', enrichData.focus);
+          }
+        }
+      } catch (enrichError) {
+        console.warn('Erro ao enriquecer perfil do lead:', enrichError);
+      }
+    }
+
     // 2.2 - Motor de Dores Prováveis
     console.log('Derivando dores prováveis...');
     const derivedPains = derivePainsFromContext(
@@ -849,6 +893,21 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
     if (companyProfileSummary && playbook.executiveSummary) {
       playbook.executiveSummary.companyContext = companyProfileSummary;
       console.log('CompanyContext definido a partir da pesquisa');
+    }
+    
+    // ENRIQUECER PERFIL DO LEAD COM DADOS DO LINKEDIN
+    if (enrichedLeadProfile.enriched && playbook.executiveSummary) {
+      playbook.executiveSummary.leadFocus = enrichedLeadProfile.focus;
+      playbook.executiveSummary.leadFocusEmoji = enrichedLeadProfile.focusEmoji;
+      playbook.executiveSummary.leadApproachHint = enrichedLeadProfile.approachSuggestion;
+      playbook.executiveSummary.leadKeyInsights = enrichedLeadProfile.keyInsights;
+      
+      // Enriquecer o leadProfile com informações do LinkedIn
+      if (enrichedLeadProfile.focusDetails) {
+        playbook.executiveSummary.leadProfile = `${playbook.executiveSummary.leadProfile || ''}\n\n🔍 Análise LinkedIn: ${enrichedLeadProfile.focusDetails}`;
+      }
+      
+      console.log('Perfil do lead enriquecido com dados do LinkedIn:', enrichedLeadProfile.focus);
     }
     
     
