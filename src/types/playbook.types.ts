@@ -60,12 +60,15 @@ export interface ProbablePain {
 }
 
 // ============================================
-// 4) COMO A META PODE AJUDAR - 10 itens (1:1 com dores)
+// 4) COMO A META PODE AJUDAR - Baseado nas dores e contexto
 // ============================================
 export interface MetaSolution {
   pain: string;                // Dor correspondente
   solution: string;            // Solução Meta IT
-  description: string;         // Explicação breve
+  description: string;         // Resultado esperado ou descrição
+  benefits?: string[];         // Top 3 benefícios da solução
+  matchReason?: string;        // Motivo do match (ex: "Dor mapeada: migração")
+  matchScore?: number;         // Score de compatibilidade (0-1)
 }
 
 // ============================================
