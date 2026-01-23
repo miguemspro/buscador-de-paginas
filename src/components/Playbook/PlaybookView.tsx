@@ -595,12 +595,39 @@ ${playbook.approachScript?.fullText || ''}
                 <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                   {playbook.metaSolutions?.map((sol, i) => (
                     <div key={i} className="border rounded-lg overflow-hidden">
-                      <div className="bg-destructive/10 px-3 sm:px-4 py-2 border-b">
-                        <p className="text-xs font-medium text-destructive">Dor: {sol.pain}</p>
+                      <div className="bg-destructive/10 px-3 sm:px-4 py-2 border-b flex items-center justify-between">
+                        <p className="text-xs font-medium text-destructive truncate flex-1">Dor: {sol.pain}</p>
+                        {sol.matchScore && (
+                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 ml-2 flex-shrink-0">
+                            {Math.round(sol.matchScore * 100)}% match
+                          </Badge>
+                        )}
                       </div>
-                      <div className="p-3 sm:p-4">
+                      <div className="p-3 sm:p-4 space-y-2">
                         <p className="font-semibold text-sm text-primary">{sol.solution}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{sol.description}</p>
+                        <p className="text-xs text-muted-foreground">{sol.description}</p>
+                        
+                        {/* Benefícios */}
+                        {sol.benefits && sol.benefits.length > 0 && (
+                          <div className="pt-2 border-t border-dashed">
+                            <p className="text-xs font-medium text-muted-foreground mb-1.5">Benefícios:</p>
+                            <ul className="space-y-0.5">
+                              {sol.benefits.slice(0, 3).map((benefit, j) => (
+                                <li key={j} className="text-xs text-foreground flex items-start gap-1">
+                                  <span className="text-primary">✓</span>
+                                  <span className="line-clamp-1">{benefit}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        
+                        {/* Match Reason */}
+                        {sol.matchReason && (
+                          <p className="text-xs text-primary/80 italic pt-1">
+                            {sol.matchReason}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}

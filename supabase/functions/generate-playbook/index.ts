@@ -390,7 +390,7 @@ function derivePainsFromContext(
 }
 
 // ============================================
-// 2.3 - BUSCAR SOLUÇÕES DO BANCO
+// 2.3 - BUSCAR SOLUÇÕES DO BANCO COM CONTEXTO
 // ============================================
 interface MetaSolution {
   id: string;
@@ -405,11 +405,19 @@ interface MetaSolution {
   expected_result: string | null;
 }
 
+interface CompanyContext {
+  sapStatus?: string;
+  industry?: string;
+  companySize?: string;
+  evidences?: { title: string; indication: string }[];
+}
+
 async function findRelevantSolutions(
-  pains: { pain: string }[],
+  pains: { pain: string; reason: string; confidence: string }[],
   roleConfig: RoleConfig,
-  sapModules: string[] | undefined
-): Promise<{ pain: string; solution: MetaSolution; matchScore: number }[]> {
+  sapModules: string[] | undefined,
+  companyContext: CompanyContext = {}
+): Promise<{ pain: string; solution: MetaSolution; matchScore: number; matchReason: string }[]> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseKey);
@@ -420,6 +428,7 @@ async function findRelevantSolutions(
     .eq('is_active', true);
 
   if (error || !solutions || solutions.length === 0) {
+    console.log('Nenhuma solução ativa encontrada no banco');
     return [];
   }
 
@@ -435,56 +444,153 @@ async function findRelevantSolutions(
     return sol.target_roles.some(r => roleNames.includes(r));
   });
 
-  // Mapear dores para soluções
-  const mappedSolutions: { pain: string; solution: MetaSolution; matchScore: number }[] = [];
+  console.log(`Soluções filtradas por cargo (${roleLevel}): ${filteredSolutions.length} de ${solutions.length}`);
 
-  for (const { pain } of pains) {
+  // Contexto para scoring adicional
+  const sapStatusLower = (companyContext.sapStatus || '').toLowerCase();
+  const isECC = sapStatusLower.includes('ecc') || sapStatusLower.includes('r/3');
+  const isS4 = sapStatusLower.includes('s/4') || sapStatusLower.includes('s4hana');
+  const evidencesText = (companyContext.evidences || [])
+    .map(e => `${e.title} ${e.indication}`)
+    .join(' ')
+    .toLowerCase();
+
+  // Mapear dores para soluções com contexto
+  const mappedSolutions: { pain: string; solution: MetaSolution; matchScore: number; matchReason: string }[] = [];
+  const usedSolutions = new Set<string>(); // Evitar duplicação de soluções
+
+  for (const painItem of pains) {
+    const { pain, reason, confidence } = painItem;
     const painLower = pain.toLowerCase();
-    let bestMatch: { solution: MetaSolution; score: number } | null = null;
+    const reasonLower = reason.toLowerCase();
+    let bestMatch: { solution: MetaSolution; score: number; reason: string } | null = null;
 
     for (const sol of filteredSolutions) {
-      let score = 0;
+      // Pular soluções já usadas
+      if (usedSolutions.has(sol.id)) continue;
 
-      // Match por dores relacionadas
-      if (sol.related_pains) {
+      let score = 0;
+      const matchReasons: string[] = [];
+
+      // 1. Match DIRETO por dores relacionadas (peso alto: 0.5)
+      if (sol.related_pains && sol.related_pains.length > 0) {
         for (const relatedPain of sol.related_pains) {
-          if (painLower.includes(relatedPain.toLowerCase()) || 
-              relatedPain.toLowerCase().includes(painLower.substring(0, 20))) {
+          const relatedLower = relatedPain.toLowerCase();
+          // Match exato ou parcial
+          if (painLower.includes(relatedLower) || relatedLower.includes(painLower.substring(0, 15))) {
             score += 0.5;
+            matchReasons.push(`Dor mapeada: "${relatedPain}"`);
+            break;
+          }
+          // Match por palavras-chave importantes
+          const keyWords = relatedLower.split(/\s+/).filter((w: string) => w.length > 4);
+          const matches = keyWords.filter((w: string) => painLower.includes(w));
+          if (matches.length >= 2) {
+            score += 0.35;
+            matchReasons.push(`Palavras-chave: ${matches.join(', ')}`);
             break;
           }
         }
       }
 
-      // Match por módulos SAP
-      if (sapModules && sol.sap_modules) {
-        const moduleMatch = sapModules.some(m => sol.sap_modules?.includes(m));
-        if (moduleMatch) score += 0.3;
+      // 2. Match por use_cases (peso: 0.3)
+      if (sol.use_cases && sol.use_cases.length > 0) {
+        for (const useCase of sol.use_cases) {
+          const useCaseLower = useCase.toLowerCase();
+          if (painLower.includes(useCaseLower.substring(0, 15)) || 
+              useCaseLower.includes(painLower.substring(0, 15))) {
+            score += 0.3;
+            matchReasons.push(`Caso de uso: "${useCase}"`);
+            break;
+          }
+        }
       }
 
-      // Match por palavras-chave na dor
-      const painWords = painLower.split(/\s+/);
+      // 3. Match por contexto SAP (peso: 0.25)
+      if (isECC && sol.name.toLowerCase().includes('migração')) {
+        score += 0.25;
+        matchReasons.push('Contexto: Empresa em ECC');
+      }
+      if (isECC && sol.name.toLowerCase().includes('s/4hana')) {
+        score += 0.2;
+        matchReasons.push('Contexto: Candidato a S/4HANA');
+      }
+      if (sol.name.toLowerCase().includes('reforma tributária') && 
+          (evidencesText.includes('tributár') || evidencesText.includes('fiscal') || evidencesText.includes('drc'))) {
+        score += 0.3;
+        matchReasons.push('Contexto: Sinais de reforma tributária');
+      }
+
+      // 4. Match por módulos SAP (peso: 0.2)
+      if (sapModules && sapModules.length > 0 && sol.sap_modules && sol.sap_modules.length > 0) {
+        const moduleMatches = sapModules.filter(m => 
+          sol.sap_modules!.some((sm: string) => sm.toLowerCase().includes(m.toLowerCase()))
+        );
+        if (moduleMatches.length > 0) {
+          score += 0.2;
+          matchReasons.push(`Módulos: ${moduleMatches.join(', ')}`);
+        }
+      }
+
+      // 5. Match por keywords na descrição (peso: 0.15)
+      const painWords = painLower.split(/\s+/).filter(w => w.length > 4);
       const descLower = sol.description.toLowerCase();
-      const matchingWords = painWords.filter(w => w.length > 3 && descLower.includes(w));
-      if (matchingWords.length > 0) {
-        score += matchingWords.length * 0.1;
+      const matchingWords = painWords.filter(w => descLower.includes(w));
+      if (matchingWords.length >= 2) {
+        score += 0.15;
+        matchReasons.push(`Descrição compatível`);
       }
 
-      if (score > 0 && (!bestMatch || score > bestMatch.score)) {
-        bestMatch = { solution: sol, score };
+      // 6. Boost por confiança da dor (alta = +0.1)
+      if (confidence === 'alta' && score > 0) {
+        score += 0.1;
+      }
+
+      // 7. Match por evidências reais (peso: 0.2)
+      if (evidencesText.length > 0) {
+        const solKeywords = [
+          ...(sol.related_pains || []),
+          ...(sol.use_cases || []),
+          sol.name
+        ].map(k => k.toLowerCase());
+        
+        for (const keyword of solKeywords) {
+          if (keyword.length > 5 && evidencesText.includes(keyword.substring(0, 10))) {
+            score += 0.2;
+            matchReasons.push('Evidência confirma necessidade');
+            break;
+          }
+        }
+      }
+
+      if (score > 0.3 && (!bestMatch || score > bestMatch.score)) {
+        bestMatch = { 
+          solution: sol, 
+          score, 
+          reason: matchReasons.length > 0 ? matchReasons[0] : 'Compatibilidade geral'
+        };
       }
     }
 
     if (bestMatch) {
+      usedSolutions.add(bestMatch.solution.id);
       mappedSolutions.push({
         pain,
         solution: bestMatch.solution,
-        matchScore: bestMatch.score
+        matchScore: bestMatch.score,
+        matchReason: bestMatch.reason
       });
     }
   }
 
-  return mappedSolutions;
+  // Ordenar por score e limitar a 5 soluções mais relevantes
+  mappedSolutions.sort((a, b) => b.matchScore - a.matchScore);
+  const topSolutions = mappedSolutions.slice(0, 5);
+  
+  console.log(`Top ${topSolutions.length} soluções mapeadas:`, 
+    topSolutions.map(s => `${s.solution.name} (${(s.matchScore * 100).toFixed(0)}%)`));
+
+  return topSolutions;
 }
 
 // ============================================
@@ -670,12 +776,18 @@ serve(async (req) => {
     );
     console.log(`Cases ranqueados: ${rankedCases.length}`);
 
-    // 2.3 - Buscar soluções do banco
-    console.log('Mapeando soluções para dores...');
+    // 2.3 - Buscar soluções do banco COM CONTEXTO
+    console.log('Mapeando soluções para dores com contexto...');
     const mappedSolutions = await findRelevantSolutions(
       derivedPains,
       roleConfig,
-      leadData.sapModules
+      leadData.sapModules,
+      {
+        sapStatus: leadData.sapStatus,
+        industry: leadData.industry,
+        companySize: leadData.companySize,
+        evidences: realEvidences
+      }
     );
     console.log(`Soluções mapeadas: ${mappedSolutions.length}`);
 
@@ -696,8 +808,8 @@ serve(async (req) => {
 
     const solutionsText = mappedSolutions.length > 0
       ? mappedSolutions.map(ms => 
-          `- Para "${ms.pain}": ${ms.solution.name} - ${ms.solution.description}`
-        ).join('\n')
+          `- Para "${ms.pain}": ${ms.solution.name}\n  Descrição: ${ms.solution.description}\n  Resultado esperado: ${ms.solution.expected_result || 'Melhoria operacional'}\n  Motivo: ${ms.matchReason} (${(ms.matchScore * 100).toFixed(0)}%)`
+        ).join('\n\n')
       : 'Soluções a serem exploradas com base no discovery.';
 
     // Contexto do lead
@@ -937,14 +1049,16 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
       playbook.probablePains = derivedPains;
     }
 
-    // Adicionar soluções mapeadas se a IA não gerou
-    if (!playbook.metaSolutions || playbook.metaSolutions.length === 0) {
-      playbook.metaSolutions = mappedSolutions.map(ms => ({
-        pain: ms.pain,
-        solution: ms.solution.name,
-        description: ms.solution.expected_result || ms.solution.description
-      }));
-    }
+    // FORÇAR uso das soluções mapeadas do banco (sempre, não apenas se IA não gerou)
+    // Isso garante que as soluções sejam baseadas nas dores e contexto real
+    playbook.metaSolutions = mappedSolutions.map(ms => ({
+      pain: ms.pain,
+      solution: ms.solution.name,
+      description: ms.solution.expected_result || ms.solution.description,
+      benefits: ms.solution.benefits?.slice(0, 3) || [],
+      matchReason: ms.matchReason,
+      matchScore: ms.matchScore
+    }));
 
     // Adicionar cases ranqueados
     playbook.relevantCases = rankedCases.map(rc => ({
