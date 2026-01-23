@@ -526,10 +526,24 @@ ${industry ? `- "${company}" ${industry} SAP` : ''}
 IMPORTANTE: Analise os resultados e forneça um resumo estruturado.
 As URLs dos resultados serão extraídas automaticamente das citações.
 
+ATENÇÃO CRÍTICA PARA O SUMMARY:
+O campo "summary" DEVE ter NO MÍNIMO 75 PALAVRAS (5-7 frases completas).
+Estruture o summary assim:
+1. PRIMEIRA FRASE: O que a empresa é e seu core business
+2. SEGUNDA FRASE: Quando foi fundada e origem/história
+3. TERCEIRA FRASE: Porte, número de funcionários e/ou faturamento
+4. QUARTA FRASE: Principais mercados, países ou segmentos de atuação
+5. QUINTA FRASE: Principais produtos, serviços ou soluções
+6. SEXTA FRASE: Propósito, missão ou diferencial competitivo
+7. SÉTIMA FRASE (opcional): Contexto SAP se disponível
+
+Exemplo de summary ADEQUADO (76 palavras):
+"A Ourofino Saúde Animal é uma das maiores empresas de saúde animal da América Latina, especializada no desenvolvimento, produção e comercialização de medicamentos veterinários. Fundada em 1987 em Cravinhos/SP, a empresa construiu um legado de inovação no agronegócio brasileiro. Com mais de 2.000 colaboradores e faturamento superior a R$ 1 bilhão, atende os mercados de animais de produção e pets. Seu portfólio inclui mais de 400 produtos para pecuária, avicultura, suinocultura e animais de companhia. A empresa tem como propósito promover a saúde animal com ciência e sustentabilidade."
+
 Retorne um JSON com o perfil da empresa:
 {
   "companyProfile": {
-    "summary": "Parágrafo de 3-5 frases sobre a empresa",
+    "summary": "Parágrafo estruturado com NO MÍNIMO 75 palavras conforme formato acima",
     "founded": "Ano ou null",
     "headquarters": "Sede ou null",
     "employees": "Número ou null",
