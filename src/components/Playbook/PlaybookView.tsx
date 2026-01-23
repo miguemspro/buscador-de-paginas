@@ -320,60 +320,69 @@ ${playbook.approachScript?.fullText || ''}
               </button>
               
               {expandedSections.summary && playbook.executiveSummary && (
-                <div className="space-y-3">
-                  {/* Lead Focus Badge - Se disponível via LinkedIn */}
-                  {playbook.executiveSummary.leadFocus && (
-                    <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg p-4 border border-primary/20">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Linkedin className="h-4 w-4 text-[#0A66C2]" />
-                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                          Foco Profissional (via LinkedIn)
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 mb-2">
-                        <Badge className="bg-primary text-primary-foreground px-3 py-1 text-sm">
-                          {playbook.executiveSummary.leadFocusEmoji || '🎯'} {playbook.executiveSummary.leadFocus}
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+                  {/* Sobre a Empresa */}
+                  <div className="bg-muted/50 rounded-lg p-3 sm:p-4 border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Building2 className="h-4 w-4 text-blue-500" />
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        Sobre a Empresa
+                      </span>
+                    </div>
+                    <p className="text-sm whitespace-pre-line">{playbook.executiveSummary.companyContext}</p>
+                  </div>
+
+                  {/* Perfil do Lead - Enriquecido com LinkedIn */}
+                  <div className="bg-muted/50 rounded-lg p-3 sm:p-4 border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <User className="h-4 w-4 text-green-500" />
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        Perfil do Lead
+                      </span>
+                      {playbook.executiveSummary.leadFocus && (
+                        <Badge variant="secondary" className="ml-auto text-xs">
+                          <Linkedin className="h-3 w-3 mr-1 text-[#0A66C2]" />
+                          Enriquecido
                         </Badge>
-                      </div>
-                      {playbook.executiveSummary.leadApproachHint && (
-                        <p className="text-sm text-muted-foreground mt-2">
-                          <strong>💡 Sugestão de abordagem:</strong> {playbook.executiveSummary.leadApproachHint}
-                        </p>
-                      )}
-                      {playbook.executiveSummary.leadKeyInsights && playbook.executiveSummary.leadKeyInsights.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-primary/10">
-                          <p className="text-xs font-medium text-muted-foreground mb-2">Insights do perfil:</p>
-                          <ul className="space-y-1">
-                            {playbook.executiveSummary.leadKeyInsights.map((insight, i) => (
-                              <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
-                                <span className="text-primary">•</span>
-                                {insight}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
                       )}
                     </div>
-                  )}
-
-                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
-                    {[
-                      { icon: Building2, label: 'Sobre a Empresa', value: playbook.executiveSummary.companyContext, color: 'text-blue-500' },
-                      { icon: User, label: 'Perfil do Lead', value: playbook.executiveSummary.leadProfile, color: 'text-green-500' },
-                    ].map((item, i) => {
-                      const Icon = item.icon;
-                      return (
-                        <div key={i} className="bg-muted/50 rounded-lg p-3 sm:p-4 border">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Icon className={cn('h-4 w-4', item.color)} />
-                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                              {item.label}
-                            </span>
-                          </div>
-                          <p className="text-sm whitespace-pre-line">{item.value}</p>
-                        </div>
-                      );
-                    })}
+                    
+                    {/* Foco Profissional Badge */}
+                    {playbook.executiveSummary.leadFocus && (
+                      <Badge className="bg-primary text-primary-foreground px-2 py-0.5 text-xs mb-3">
+                        {playbook.executiveSummary.leadFocusEmoji || '🎯'} {playbook.executiveSummary.leadFocus}
+                      </Badge>
+                    )}
+                    
+                    {/* Sugestão de Abordagem */}
+                    {playbook.executiveSummary.leadApproachHint && (
+                      <div className="mb-3 p-2 bg-primary/5 rounded border border-primary/10">
+                        <p className="text-sm">
+                          <strong className="text-primary">💡 Sugestão de abordagem:</strong>{' '}
+                          {playbook.executiveSummary.leadApproachHint}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Insights do Perfil */}
+                    {playbook.executiveSummary.leadKeyInsights && playbook.executiveSummary.leadKeyInsights.length > 0 && (
+                      <div className="mb-3">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Insights do perfil:</p>
+                        <ul className="space-y-1.5">
+                          {playbook.executiveSummary.leadKeyInsights.map((insight, i) => (
+                            <li key={i} className="text-sm text-foreground flex items-start gap-1.5">
+                              <span className="text-primary mt-0.5">•</span>
+                              {insight}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {/* Perfil base (se não houver enriquecimento ou como complemento) */}
+                    {(!playbook.executiveSummary.leadFocus && playbook.executiveSummary.leadProfile) && (
+                      <p className="text-sm whitespace-pre-line">{playbook.executiveSummary.leadProfile}</p>
+                    )}
                   </div>
                 </div>
               )}
