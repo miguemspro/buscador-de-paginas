@@ -320,24 +320,61 @@ ${playbook.approachScript?.fullText || ''}
               </button>
               
               {expandedSections.summary && playbook.executiveSummary && (
-                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
-                  {[
-                    { icon: Building2, label: 'Sobre a Empresa', value: playbook.executiveSummary.companyContext, color: 'text-blue-500' },
-                    { icon: User, label: 'Perfil do Lead', value: playbook.executiveSummary.leadProfile, color: 'text-green-500' },
-                  ].map((item, i) => {
-                    const Icon = item.icon;
-                    return (
-                      <div key={i} className="bg-muted/50 rounded-lg p-3 sm:p-4 border">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Icon className={cn('h-4 w-4', item.color)} />
-                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                            {item.label}
-                          </span>
-                        </div>
-                        <p className="text-sm">{item.value}</p>
+                <div className="space-y-3">
+                  {/* Lead Focus Badge - Se disponível via LinkedIn */}
+                  {playbook.executiveSummary.leadFocus && (
+                    <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg p-4 border border-primary/20">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Linkedin className="h-4 w-4 text-[#0A66C2]" />
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          Foco Profissional (via LinkedIn)
+                        </span>
                       </div>
-                    );
-                  })}
+                      <div className="flex items-center gap-3 mb-2">
+                        <Badge className="bg-primary text-primary-foreground px-3 py-1 text-sm">
+                          {playbook.executiveSummary.leadFocusEmoji || '🎯'} {playbook.executiveSummary.leadFocus}
+                        </Badge>
+                      </div>
+                      {playbook.executiveSummary.leadApproachHint && (
+                        <p className="text-sm text-muted-foreground mt-2">
+                          <strong>💡 Sugestão de abordagem:</strong> {playbook.executiveSummary.leadApproachHint}
+                        </p>
+                      )}
+                      {playbook.executiveSummary.leadKeyInsights && playbook.executiveSummary.leadKeyInsights.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-primary/10">
+                          <p className="text-xs font-medium text-muted-foreground mb-2">Insights do perfil:</p>
+                          <ul className="space-y-1">
+                            {playbook.executiveSummary.leadKeyInsights.map((insight, i) => (
+                              <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                                <span className="text-primary">•</span>
+                                {insight}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+                    {[
+                      { icon: Building2, label: 'Sobre a Empresa', value: playbook.executiveSummary.companyContext, color: 'text-blue-500' },
+                      { icon: User, label: 'Perfil do Lead', value: playbook.executiveSummary.leadProfile, color: 'text-green-500' },
+                    ].map((item, i) => {
+                      const Icon = item.icon;
+                      return (
+                        <div key={i} className="bg-muted/50 rounded-lg p-3 sm:p-4 border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Icon className={cn('h-4 w-4', item.color)} />
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                              {item.label}
+                            </span>
+                          </div>
+                          <p className="text-sm whitespace-pre-line">{item.value}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </Card>

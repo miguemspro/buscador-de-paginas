@@ -31,6 +31,10 @@ export interface ExecutiveSummary {
   priorities2026: string;      // 2 hipóteses de prioridade
   approachAngle: string;       // Melhor ângulo (diagnóstico primeiro)
   publicContext: string;       // Contexto público recente
+  leadFocus?: string;          // Foco profissional detectado (via LinkedIn)
+  leadFocusEmoji?: string;     // Emoji do foco (📊, 🏭, 💻, etc.)
+  leadApproachHint?: string;   // Sugestão de abordagem personalizada
+  leadKeyInsights?: string[];  // Insights chave do perfil
 }
 
 // ============================================
