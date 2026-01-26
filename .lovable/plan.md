@@ -1,167 +1,140 @@
 
+# Plano: Cadastro Completo dos Cases de Sucesso da Meta IT
 
-# Plano: Enriquecimento do Perfil do Lead com Apify LinkedIn Scraper
+## Resumo
 
-## Objetivo
-Integrar o **Apify LinkedIn Profile Scraper** (Actor `VhxlqQXRwhW8H5hNV`) para analisar o perfil real do lead no LinkedIn e gerar uma descrição inteligente que destaque:
-- Foco profissional do lead (dados, manufatura, TI, etc.)
-- Experiências e habilidades relevantes para a prospecção SAP
-- Sugestão de abordagem personalizada baseada no perfil
+Vou cadastrar **18 cases de sucesso** extraídos do site oficial da Meta IT na tabela `meta_cases`. Os cases estão divididos em:
+- **7 cases detalhados** (com informações completas)
+- **11 cases em preparação** (com informações básicas)
 
-## O que será entregue
+## Cases a Cadastrar
 
-### 1. Nova Edge Function: `enrich-lead-profile`
-Uma função dedicada para buscar dados do LinkedIn via Apify e gerar insights com IA.
+### Cases Detalhados (7)
 
-**Fluxo da função:**
+| # | Empresa | Setor | Tipo de Projeto |
+|---|---------|-------|-----------------|
+| 1 | Bruning | Industrial/Metalmecânico | Atualização S/4HANA + Reforma Tributária |
+| 2 | Cocatrel | Agronegócio/Laticínios | Automação Industrial + S/4HANA |
+| 3 | Meta | Tecnologia | Transformação Digital Interna |
+| 4 | Tromink | Agronegócio/Industrial | Implementação S/4HANA |
+| 5 | Argenta | Combustíveis | Implementação S/4HANA Rise |
+| 6 | Supera Farma | Farmacêutico | Implementação S/4HANA Rise |
+| 7 | Lavoro | Agronegócio | Rollout + AMS |
+
+### Cases em Preparação (11)
+
+| # | Empresa | Setor | Título |
+|---|---------|-------|--------|
+| 8 | Paradise Mobile | Tecnologia | 5G tecnologia e inovação |
+| 9 | V4 | Financeiro | Preparação para IPO |
+| 10 | Sicoob | Financeiro | Redução de R$3M em custos |
+| 11 | TJ-RS | Setor Público | Transformação digital |
+| 12 | Min. Justiça | Setor Público | Vanguarda digital |
+| 13 | CRT-BA | Setor Público | DX para órgãos públicos |
+| 14 | Olist | Tecnologia | Unicórnio brasileiro |
+| 15 | Bruning (v2) | Industrial | Atualização S/4HANA |
+| 16 | TV Globo | Mídia | Transformação ágil |
+| 17 | Sicredi | Financeiro | BPO |
+| 18 | Banco Original | Financeiro | Transformação ágil |
+
+## Mapeamento de Campos
+
+Cada case será cadastrado seguindo a estrutura da tabela `meta_cases`:
+
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│  INPUT: linkedinUrl (username ou URL completa)               │
-├──────────────────────────────────────────────────────────────┤
-│  1. Chamar Apify Actor VhxlqQXRwhW8H5hNV                     │
-│     - Extrair: headline, summary, experience, skills         │
-│                                                              │
-│  2. Enviar dados para IA (Gemini)                            │
-│     - Analisar foco profissional                             │
-│     - Identificar inclinações (dados, TI, operações, etc.)   │
-│     - Gerar sugestão de abordagem                            │
-│                                                              │
-│  OUTPUT: { enrichedProfile, focus, suggestion, rawData }     │
-└──────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│  CAMPOS OBRIGATÓRIOS                                           │
+├────────────────────────────────────────────────────────────────┤
+│  company_name     → Nome da Empresa (ex: "Bruning")            │
+│  industry         → Setor principal (ex: "Industrial")         │
+│  industry_keywords→ Keywords do setor ["metalmecânico", ...]   │
+│  title            → Título do case                             │
+│  description      → Descrição completa (min 50 palavras)       │
+│  results          → Array de resultados obtidos                │
+│  sap_solutions    → Soluções SAP utilizadas ["S/4HANA", ...]   │
+├────────────────────────────────────────────────────────────────┤
+│  CAMPOS OPCIONAIS                                              │
+├────────────────────────────────────────────────────────────────┤
+│  company_size     → Porte (pequeno/medio/grande/enterprise)    │
+│  sap_modules      → Módulos SAP ["MM", "FI", ...]              │
+│  challenge        → Desafio do cliente                         │
+│  solution         → Solução aplicada pela Meta                 │
+│  key_result       → Resultado principal destacado              │
+│  project_type     → Tipo de projeto (implementacao/migracao)   │
+│  case_url         → Link do case no site                       │
+│  country          → País ("Brasil")                            │
+│  is_active        → true (para cases detalhados)               │
+│                   → false (para cases em preparação)           │
+└────────────────────────────────────────────────────────────────┘
 ```
 
-### 2. Integração no Playbook
-O campo `leadProfile` no Resumo Executivo será enriquecido com:
-- **Foco detectado**: ex. "Gestor focado em dados e analytics"
-- **Sugestão de abordagem**: ex. "Destacar cases de SAP BW/4HANA e data lakes"
+## Detalhamento Técnico
 
-### 3. Interface Visual (PlaybookView)
-No card "Perfil do Lead", exibiremos:
-- A análise enriquecida do perfil
-- Badge indicando o foco detectado (ex: "📊 Orientado a Dados")
+### Estrutura de Cada Case
 
-## Detalhes Técnicos
-
-### Nova Edge Function: `supabase/functions/enrich-lead-profile/index.ts`
-
-```typescript
-// Estrutura principal
-const corsHeaders = { ... };
-
-serve(async (req) => {
-  const { linkedinUrl } = await req.json();
-  
-  // 1. Extrair username do LinkedIn
-  const username = extractUsername(linkedinUrl);
-  
-  // 2. Chamar Apify REST API
-  const apifyResponse = await fetch(
-    `https://api.apify.com/v2/acts/VhxlqQXRwhW8H5hNV/run-sync-get-dataset-items`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${APIFY_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        username: username,
-        includeEmail: false
-      })
-    }
-  );
-  
-  // 3. Analisar perfil com IA
-  const profileData = await apifyResponse.json();
-  const enrichedAnalysis = await analyzeProfileWithAI(profileData);
-  
-  return Response.json({ enrichedProfile: enrichedAnalysis });
-});
-```
-
-### Integração no `generate-playbook/index.ts`
-
-Após a pesquisa de evidências, chamar a nova função se `linkedinUrl` estiver disponível:
-
-```typescript
-// Na função principal, após pesquisar evidências
-if (leadData.linkedinUrl) {
-  const enrichedProfile = await fetch(
-    `${supabaseUrl}/functions/v1/enrich-lead-profile`,
-    { body: JSON.stringify({ linkedinUrl: leadData.linkedinUrl }) }
-  );
-  // Usar enrichedProfile.focus e enrichedProfile.suggestion
-}
-```
-
-### Prompt de Análise (IA)
-
-A IA receberá os dados do LinkedIn e gerará:
+**Exemplo - Case Bruning (detalhado):**
 ```json
 {
-  "focus": "Gestão de Dados e Analytics",
-  "focusDetails": "Profissional com 8+ anos focado em BI, data governance e projetos de modernização de dados",
-  "sapRelevance": ["SAP BW/4HANA", "SAP Datasphere", "SAP Analytics Cloud"],
-  "approachSuggestion": "Abordar com foco em cases de migração de dados e data lakes. Evitar termos muito técnicos de infraestrutura.",
-  "keyInsights": [
-    "Experiência anterior em projeto de data lake",
-    "Certificação em Power BI - valoriza visualização",
-    "Atua como gestor há 3+ anos"
-  ]
+  "company_name": "Bruning",
+  "industry": "Industrial",
+  "industry_keywords": ["metalmecânico", "manufatura", "indústria"],
+  "company_size": "enterprise",
+  "title": "Bruning evolui sua operação para a última versão do SAP S/4HANA e se prepara para a reforma tributária",
+  "description": "Atualização para a última versão do SAP S/4HANA, migrando de um sistema próprio para uma solução ERP robusta, visando conformidade com a Reforma Tributária e busca contínua por eficiência. A Bruning, com mais de 1.001 colaboradores, é referência no setor metalmecânico brasileiro.",
+  "challenge": "Sustentar o crescimento acelerado, garantir conformidade com a Reforma Tributária e manter a eficiência operacional.",
+  "solution": "Atualização do SAP S/4HANA com a Meta, com foco em alinhamento cultural, equipes integradas e Gestão de Mudança Organizacional (GMO).",
+  "key_result": "Preparação para a Reforma Tributária e potencialização do uso da ferramenta para decisões mais seguras.",
+  "results": [
+    "Maior estabilidade operacional",
+    "Melhorias na integração entre módulos e processos",
+    "Mais eficiência na tomada de decisão",
+    "Base tecnológica preparada para exigências fiscais",
+    "Fortalecimento da estrutura interna"
+  ],
+  "sap_solutions": ["S/4HANA", "DRC"],
+  "sap_modules": ["FI", "CO", "MM", "SD"],
+  "project_type": "upgrade",
+  "case_url": "https://meta.com.br/cases/bruning-atualizacao",
+  "country": "Brasil",
+  "is_active": true
 }
 ```
 
-### Atualização do Tipo `ExecutiveSummary`
-
-Adicionar campo opcional:
-```typescript
-export interface ExecutiveSummary {
-  // ... campos existentes
-  leadProfile: string;
-  leadFocus?: string;          // NOVO: "Orientado a Dados"
-  leadApproachHint?: string;   // NOVO: Sugestão de abordagem
+**Exemplo - Case em Preparação (Sicoob):**
+```json
+{
+  "company_name": "Sicoob",
+  "industry": "Financeiro",
+  "industry_keywords": ["cooperativa", "crédito", "banco", "financeiro"],
+  "company_size": "enterprise",
+  "title": "Sicoob reduz R$3 milhões em custos operacionais com apoio da Meta",
+  "description": "Projeto de otimização e redução de custos operacionais com o Sicoob, uma das maiores cooperativas de crédito do Brasil, resultando em economia significativa de R$3 milhões.",
+  "results": ["Redução de R$3 milhões em custos operacionais"],
+  "sap_solutions": ["S/4HANA"],
+  "project_type": "implementacao",
+  "case_url": "https://meta.com.br/cases/sicoob",
+  "country": "Brasil",
+  "is_active": false
 }
 ```
 
-### Cache de Resultados
+## Execução
 
-Para evitar custos repetidos com Apify:
-- Armazenar resultado na tabela `research_cache` (já existente)
-- TTL: 7 dias (perfis profissionais mudam pouco)
-- Key: `linkedin_profile_{username}`
+A inserção será feita em **2 lotes**:
 
-## Arquivos a Modificar/Criar
+1. **Lote 1**: 7 cases detalhados (com `is_active: true`)
+2. **Lote 2**: 11 cases em preparação (com `is_active: false`)
 
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/enrich-lead-profile/index.ts` | **Criar** - Nova edge function |
-| `supabase/functions/generate-playbook/index.ts` | **Modificar** - Integrar enriquecimento |
-| `src/types/playbook.types.ts` | **Modificar** - Adicionar novos campos |
-| `src/components/Playbook/PlaybookView.tsx` | **Modificar** - Exibir foco do lead |
-| `supabase/config.toml` | **Modificar** - Registrar nova função |
+Os cases em preparação ficam com `is_active: false` para não aparecerem nos playbooks até que tenham conteúdo completo. Quando o site da Meta IT atualizar o conteúdo, basta mudar para `is_active: true`.
 
-## Fluxo de Usuário
+## Resultado Final
 
-1. SDR faz upload do print do Salesforce
-2. OCR extrai dados incluindo LinkedIn URL (se disponível)
-3. Sistema pesquisa evidências (já existe)
-4. **NOVO**: Sistema chama Apify para enriquecer perfil
-5. **NOVO**: IA analisa perfil e gera insights
-6. Playbook é gerado com "Perfil do Lead" enriquecido
-7. SDR vê badge de foco e sugestão de abordagem personalizada
+Após a execução, a tabela `meta_cases` terá:
+- **18 cases** cadastrados
+- **7 cases ativos** (aparecem nos playbooks)
+- **11 cases inativos** (prontos para ativação futura)
 
-## Tratamento de Erros
-
-- **LinkedIn URL não fornecida**: Manter comportamento atual (inferir do cargo)
-- **Apify timeout**: Fallback para inferência básica
-- **Perfil privado/não encontrado**: Registrar como "Perfil não disponível publicamente"
-- **Erro de API**: Não bloquear geração do playbook, apenas logar
-
-## Considerações de Custo
-
-- Apify cobra por execução do Actor (~$0.001-$0.01 por perfil)
-- Cache de 7 dias reduz chamadas repetidas
-- Apenas consultar quando LinkedIn URL estiver disponível
-
-## Secret já configurada
-O `APIFY_API_KEY` já está nos secrets do projeto com o valor que você forneceu.
-
+Os cases serão automaticamente utilizados pelo sistema de ranking para sugerir cases relevantes baseados em:
+- Similaridade de indústria
+- Módulos SAP em comum
+- Tipo de projeto correspondente
