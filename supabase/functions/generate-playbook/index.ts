@@ -207,21 +207,48 @@ async function rankCasesBySimilarity(
 // FILTRO DE COMPATIBILIDADE SAP
 // ============================================
 // Palavras-chave de soluções de MIGRAÇÃO para S/4HANA
+// IMPORTANTE: Estas keywords identificam soluções que NÃO devem ser oferecidas
+// a clientes que já estão em S/4HANA ou estão migrando
 const S4_MIGRATION_KEYWORDS = [
+  // Termos diretos de migração
   'migração s/4',
   'migração s4',
   'migração para s/4',
+  'migracao s/4',
+  'migracao s4',
+  'migrar para s/4',
+
+  // Termos de conversão
   'conversão s/4',
   'conversão s4',
+  'conversao s/4',
+  'conversao s4',
+  'conversão para s/4',
+  'converter para s/4',
+
+  // Abordagens de migração
   'brownfield',
   'greenfield',
+  'selective data transition',
+  'system conversion',
+  'new implementation',
+
+  // Outros termos
   'upgrade para s/4',
+  'upgrade s/4',
   'move to s/4',
   'journey to s/4',
+  'jornada s/4',
   'transição para s/4',
+  'transicao para s/4',
   'migração sap s/4',
   'migração sap s4',
-  'conversão para s/4'
+  'rise with sap',
+
+  // Termos de urgência de migração
+  'fim de suporte ecc',
+  'deadline 2027',
+  'antes do fim de suporte'
 ];
 
 function isMigrationToS4Solution(solutionName: string): boolean {
@@ -230,15 +257,39 @@ function isMigrationToS4Solution(solutionName: string): boolean {
 }
 
 // Padrões de dores de migração que NÃO devem aparecer para clientes S/4HANA
+// IMPORTANTE: Se o cliente já está em S/4HANA ou migrando, estas dores são irrelevantes
 const MIGRATION_PAIN_PATTERNS = [
+  // Termos de migração
   'migração',
+  'migracao',
+  'migrar',
+
+  // Termos de conversão
+  'conversão',
+  'conversao',
+  'converter',
+
+  // Deadlines e urgência
   'deadline 2027',
+  '2027',
   'fim de suporte',
   'suporte ecc',
+  'fim do suporte',
+
+  // Termos de upgrade
   'upgrade para s/4',
-  'conversão para s/4',
-  'planejamento de roadmap de migração',
-  'antes do fim de suporte'
+  'upgrade s/4',
+  'atualização para s/4',
+
+  // Planejamento de migração
+  'planejamento de roadmap',
+  'roadmap de migração',
+  'antes do fim de suporte',
+  'pressão pelo deadline',
+
+  // ECC específico
+  'ecc',
+  'r/3'
 ];
 
 // Verificar se cliente está em S/4HANA - usa valores exatos do enum
@@ -281,116 +332,283 @@ function isClientOnECC(sapStatus: string | undefined): boolean {
 // ============================================
 // DETECÇÃO INTELIGENTE DE STATUS SAP VIA EVIDÊNCIAS
 // ============================================
+// VERSÃO 2.0 - DETECÇÃO ROBUSTA COM REGEX E SCORING
+// ============================================
 
-// Palavras-chave que indicam S/4HANA JÁ IMPLEMENTADO
-const S4_IMPLEMENTED_KEYWORDS = [
-  'implementou s/4',
-  'implementou s4',
-  'migrou para s/4',
-  'migrou para s4',
-  'implantou s/4',
-  'implantou s4',
-  'go-live s/4',
-  'go-live s4',
-  'já está em s/4',
-  'já está em s4',
-  'opera em s/4',
-  'opera em s4',
-  'utiliza s/4',
-  'utiliza s4',
-  'adotou s/4',
-  'adotou s4',
-  'concluiu migração',
-  'concluída migração',
-  'finalizada migração para s/4',
-  's/4hana em produção',
-  's4hana em produção',
-  'projeto s/4hana concluído',
-  'projeto s4hana concluído',
-  'já migrou',
-  'migração concluída',
-  'transição para s/4 finalizada'
+interface SapDetectionResult {
+  status: 's4hana_live' | 's4hana_in_progress' | 'ecc' | 'unknown';
+  confidence: 'alta' | 'media' | 'baixa';
+  score: number;
+  matchedPatterns: string[];
+  evidenceSource: string;
+}
+
+// PADRÕES REGEX PARA S/4HANA JÁ EM PRODUÇÃO (GO-LIVE CONCLUÍDO)
+const S4_LIVE_PATTERNS: { pattern: RegExp; weight: number; description: string }[] = [
+  // Padrões de go-live explícito
+  { pattern: /go[\s\-]?live.{0,30}(s\/4|s4|hana)/i, weight: 100, description: 'go-live + S/4HANA' },
+  { pattern: /(s\/4|s4hana|s\/4hana).{0,30}go[\s\-]?live/i, weight: 100, description: 'S/4HANA + go-live' },
+  { pattern: /#golive.{0,20}#?(s4hana|s\/4)/i, weight: 100, description: 'hashtag golive + s4hana' },
+  { pattern: /#(s4hana|s\/4).{0,20}#?golive/i, weight: 100, description: 'hashtag s4hana + golive' },
+  { pattern: /celebr(ando|ou|a).{0,40}go[\s\-]?live/i, weight: 95, description: 'celebrando go-live' },
+  { pattern: /celebr(ando|ou|a).{0,40}(s\/4|s4hana)/i, weight: 90, description: 'celebrando S/4HANA' },
+
+  // Padrões de conclusão/sucesso de migração
+  { pattern: /(conclu|finaliz|complet|entreg)(í|iu|ída|ído|ou|amos).{0,30}(migra|implanta|s\/4|s4hana)/i, weight: 95, description: 'conclusão de migração' },
+  { pattern: /(migra|implanta)(ção|ram|mos).{0,30}(conclu|sucesso|finaliz)/i, weight: 95, description: 'migração concluída' },
+  { pattern: /(s\/4|s4hana).{0,30}(conclu|sucesso|finaliz|implementad|implantad)/i, weight: 90, description: 'S/4HANA concluído' },
+  { pattern: /(implementa|implanta)(do|da|ção|ram).{0,20}(s\/4|s4hana)/i, weight: 85, description: 'implementado S/4HANA' },
+
+  // Padrões de operação em S/4HANA
+  { pattern: /(opera|rodando|funcionando|produção).{0,20}(s\/4|s4hana)/i, weight: 80, description: 'operando em S/4HANA' },
+  { pattern: /(s\/4|s4hana).{0,20}(opera|rodando|funcionando|produção)/i, weight: 80, description: 'S/4HANA em operação' },
+  { pattern: /ambiente.{0,15}(s\/4|s4hana).{0,15}(estável|produção|live)/i, weight: 85, description: 'ambiente S/4HANA estável' },
+
+  // Padrões de projeto específico (ex: SMART da Klabin)
+  { pattern: /projeto.{0,20}(smart|rise|s\/4).{0,30}(go[\s\-]?live|conclu|sucesso)/i, weight: 95, description: 'projeto com go-live' },
+  { pattern: /(smart|rise).{0,20}(go[\s\-]?live|conclu|sucesso|entrega)/i, weight: 90, description: 'projeto SMART/RISE concluído' },
+
+  // Padrões de pós-go-live (indica que já está em produção)
+  { pattern: /(pós|pos)[\s\-]?(go[\s\-]?live|implementação)/i, weight: 85, description: 'pós-go-live' },
+  { pattern: /hypercare.{0,20}(s\/4|s4hana)/i, weight: 85, description: 'hypercare S/4HANA' },
+  { pattern: /estabiliza(ção|ndo).{0,20}(s\/4|s4hana)/i, weight: 80, description: 'estabilização S/4HANA' },
+
+  // Padrões de case de sucesso
+  { pattern: /case.{0,15}(sucesso|s\/4|s4hana).{0,30}(migra|implanta|conclu)/i, weight: 85, description: 'case de sucesso' },
+  { pattern: /(sucesso|êxito).{0,30}(migra|implanta).{0,20}(s\/4|s4hana)/i, weight: 85, description: 'sucesso na migração' },
+
+  // Padrões de SAP ECC para S/4HANA (indica que já migrou)
+  { pattern: /(ecc|r\/3).{0,20}para.{0,20}(s\/4|s4hana).{0,30}(conclu|sucesso|finaliz)/i, weight: 95, description: 'ECC para S/4 concluído' },
+  { pattern: /migra(ção|ram|mos).{0,20}(ecc|r\/3).{0,20}(s\/4|s4hana)/i, weight: 75, description: 'migração ECC para S/4' },
 ];
 
-// Palavras-chave que indicam cliente ainda em ECC (precisa migrar)
-const ECC_STILL_KEYWORDS = [
-  'ainda em ecc',
-  'utiliza ecc',
-  'opera em ecc',
-  'precisa migrar',
-  'planejando migração',
-  'roadmap de migração',
-  'projeto de migração em andamento',
-  'avaliando migração',
-  'preparando para migrar',
-  'iniciando jornada s/4'
+// PADRÕES REGEX PARA MIGRAÇÃO EM ANDAMENTO
+const S4_IN_PROGRESS_PATTERNS: { pattern: RegExp; weight: number; description: string }[] = [
+  { pattern: /(migrando|implementando|em.{0,10}andamento).{0,20}(s\/4|s4hana)/i, weight: 70, description: 'migrando para S/4HANA' },
+  { pattern: /projeto.{0,15}(s\/4|s4hana).{0,20}(andamento|fase|etapa)/i, weight: 65, description: 'projeto S/4 em andamento' },
+  { pattern: /(roadmap|planejamento).{0,20}(s\/4|s4hana)/i, weight: 50, description: 'planejamento S/4' },
+  { pattern: /(iniciando|início|começando).{0,20}(s\/4|s4hana|jornada)/i, weight: 55, description: 'iniciando jornada S/4' },
 ];
 
-// Detectar status SAP baseado nas evidências encontradas
+// PADRÕES REGEX PARA AINDA EM ECC
+const ECC_PATTERNS: { pattern: RegExp; weight: number; description: string }[] = [
+  { pattern: /(ainda|atualmente).{0,15}(ecc|r\/3)/i, weight: 80, description: 'ainda em ECC' },
+  { pattern: /(utiliza|usa|opera).{0,15}(ecc|r\/3)/i, weight: 70, description: 'utiliza ECC' },
+  { pattern: /(ecc|r\/3).{0,20}(precisa|necessita|deve).{0,20}migrar/i, weight: 85, description: 'ECC precisa migrar' },
+  { pattern: /deadline.{0,15}2027.{0,20}(ecc|migra)/i, weight: 75, description: 'deadline 2027' },
+  { pattern: /(avaliando|analisando|considerando).{0,20}migração/i, weight: 60, description: 'avaliando migração' },
+];
+
+// Função principal de detecção com scoring
 function detectSapStatusFromEvidences(
-  evidences: { title: string; indication: string }[]
-): 's4hana' | 'ecc' | null {
-  console.log(`[SAP Detection] Analisando ${evidences.length} evidências para detectar status SAP real`);
-  
+  evidences: { title: string; indication: string; category?: string }[]
+): SapDetectionResult {
+  console.log(`\n========================================`);
+  console.log(`[SAP Detection v2.0] Analisando ${evidences.length} evidências`);
+  console.log(`========================================`);
+
+  let s4LiveScore = 0;
+  let s4InProgressScore = 0;
+  let eccScore = 0;
+  const s4LiveMatches: string[] = [];
+  const s4InProgressMatches: string[] = [];
+  const eccMatches: string[] = [];
+  let primarySource = '';
+
   for (const evidence of evidences) {
     const text = `${evidence.title} ${evidence.indication}`.toLowerCase();
-    
-    // Verificar se indica S/4HANA já implementado
-    for (const keyword of S4_IMPLEMENTED_KEYWORDS) {
-      if (text.includes(keyword)) {
-        console.log(`[SAP Detection] Evidência indica S/4HANA implementado: "${evidence.title}"`);
-        return 's4hana';
+    const category = evidence.category || 'unknown';
+
+    // Bonus de peso para evidências do LinkedIn (geralmente mais confiáveis e recentes)
+    const categoryBonus = category.toLowerCase() === 'linkedin' ? 1.2 : 1.0;
+
+    // Verificar padrões de S/4HANA LIVE
+    for (const { pattern, weight, description } of S4_LIVE_PATTERNS) {
+      if (pattern.test(text)) {
+        const adjustedWeight = weight * categoryBonus;
+        s4LiveScore += adjustedWeight;
+        s4LiveMatches.push(`${description} [${category}] (+${adjustedWeight.toFixed(0)})`);
+        if (!primarySource || category.toLowerCase() === 'linkedin') {
+          primarySource = evidence.title.substring(0, 60);
+        }
+        console.log(`[S4 LIVE] Match: "${description}" em "${evidence.title.substring(0, 50)}..." (+${adjustedWeight.toFixed(0)})`);
       }
     }
-    
-    // Verificar se indica ainda em ECC
-    for (const keyword of ECC_STILL_KEYWORDS) {
-      if (text.includes(keyword)) {
-        console.log(`[SAP Detection] Evidência indica ainda em ECC: "${evidence.title}"`);
-        return 'ecc';
+
+    // Verificar padrões de S/4HANA EM ANDAMENTO
+    for (const { pattern, weight, description } of S4_IN_PROGRESS_PATTERNS) {
+      if (pattern.test(text)) {
+        const adjustedWeight = weight * categoryBonus;
+        s4InProgressScore += adjustedWeight;
+        s4InProgressMatches.push(`${description} [${category}] (+${adjustedWeight.toFixed(0)})`);
+        console.log(`[S4 IN PROGRESS] Match: "${description}" em "${evidence.title.substring(0, 50)}..." (+${adjustedWeight.toFixed(0)})`);
+      }
+    }
+
+    // Verificar padrões de ECC
+    for (const { pattern, weight, description } of ECC_PATTERNS) {
+      if (pattern.test(text)) {
+        const adjustedWeight = weight * categoryBonus;
+        eccScore += adjustedWeight;
+        eccMatches.push(`${description} [${category}] (+${adjustedWeight.toFixed(0)})`);
+        console.log(`[ECC] Match: "${description}" em "${evidence.title.substring(0, 50)}..." (+${adjustedWeight.toFixed(0)})`);
       }
     }
   }
-  
-  return null; // Não foi possível determinar
+
+  console.log(`\n[SCORES FINAIS]`);
+  console.log(`  S/4HANA Live: ${s4LiveScore} (${s4LiveMatches.length} matches)`);
+  console.log(`  S/4HANA In Progress: ${s4InProgressScore} (${s4InProgressMatches.length} matches)`);
+  console.log(`  ECC: ${eccScore} (${eccMatches.length} matches)`);
+
+  // Determinar resultado baseado nos scores
+  // REGRA CRÍTICA: Se há QUALQUER evidência forte de go-live (score >= 80), considerar S/4HANA LIVE
+  // Isso evita que evidências antigas de ECC sobreponham evidências recentes de go-live
+
+  let result: SapDetectionResult;
+
+  if (s4LiveScore >= 80) {
+    // S/4HANA em produção confirmado
+    const confidence = s4LiveScore >= 200 ? 'alta' : (s4LiveScore >= 100 ? 'media' : 'baixa');
+    result = {
+      status: 's4hana_live',
+      confidence,
+      score: s4LiveScore,
+      matchedPatterns: s4LiveMatches,
+      evidenceSource: primarySource
+    };
+    console.log(`\n>>> RESULTADO: S/4HANA LIVE (confiança: ${confidence}, score: ${s4LiveScore})`);
+  } else if (s4InProgressScore > eccScore && s4InProgressScore >= 50) {
+    // Migração em andamento
+    result = {
+      status: 's4hana_in_progress',
+      confidence: s4InProgressScore >= 100 ? 'media' : 'baixa',
+      score: s4InProgressScore,
+      matchedPatterns: s4InProgressMatches,
+      evidenceSource: primarySource
+    };
+    console.log(`\n>>> RESULTADO: S/4HANA EM ANDAMENTO (score: ${s4InProgressScore})`);
+  } else if (eccScore >= 50 && eccScore > s4LiveScore) {
+    // Ainda em ECC
+    result = {
+      status: 'ecc',
+      confidence: eccScore >= 100 ? 'alta' : 'media',
+      score: eccScore,
+      matchedPatterns: eccMatches,
+      evidenceSource: primarySource
+    };
+    console.log(`\n>>> RESULTADO: ECC (score: ${eccScore})`);
+  } else {
+    // Não foi possível determinar
+    result = {
+      status: 'unknown',
+      confidence: 'baixa',
+      score: 0,
+      matchedPatterns: [],
+      evidenceSource: ''
+    };
+    console.log(`\n>>> RESULTADO: DESCONHECIDO (scores muito baixos)`);
+  }
+
+  console.log(`========================================\n`);
+  return result;
+}
+
+// Função helper para verificar se é S/4HANA (usado em outros lugares)
+function isDetectedAsS4Live(detection: SapDetectionResult): boolean {
+  return detection.status === 's4hana_live' && detection.confidence !== 'baixa';
 }
 
 // Função combinada que usa ambas as fontes (formulário + evidências)
+// VERSÃO 2.0: Evidências TÊM PRIORIDADE sobre formulário quando há alta confiança
 function getEffectiveSapStatus(
   sapStatusFromForm: string | undefined,
-  evidences: { title: string; indication: string }[]
-): { isS4: boolean; isECC: boolean; source: 'form' | 'evidence' | 'unknown' } {
-  
-  // 1. Tentar detectar pelo formulário primeiro
+  evidences: { title: string; indication: string; category?: string }[]
+): {
+  isS4: boolean;
+  isECC: boolean;
+  isS4InProgress: boolean;
+  source: 'form' | 'evidence' | 'unknown';
+  detection: SapDetectionResult | null;
+} {
+
+  console.log(`\n[getEffectiveSapStatus] Formulário: "${sapStatusFromForm}", Evidências: ${evidences.length}`);
+
+  // 1. SEMPRE analisar evidências primeiro (são mais confiáveis que formulário manual)
+  const detection = detectSapStatusFromEvidences(evidences);
+
+  // 2. Se a detecção por evidências tem ALTA ou MÉDIA confiança, usar ela
+  // REGRA CRÍTICA: Evidências de go-live sobrepõem formulário
+  if (detection.status === 's4hana_live' && (detection.confidence === 'alta' || detection.confidence === 'media')) {
+    console.log(`[SAP Status] ⚠️ EVIDÊNCIAS INDICAM S/4HANA LIVE (${detection.confidence}) - SOBREPONDO FORMULÁRIO`);
+    console.log(`[SAP Status] Fonte: ${detection.evidenceSource}`);
+    console.log(`[SAP Status] Padrões: ${detection.matchedPatterns.slice(0, 3).join('; ')}`);
+    return {
+      isS4: true,
+      isECC: false,
+      isS4InProgress: false,
+      source: 'evidence',
+      detection
+    };
+  }
+
+  if (detection.status === 's4hana_in_progress' && detection.confidence !== 'baixa') {
+    console.log(`[SAP Status] Evidências indicam S/4HANA EM ANDAMENTO`);
+    return {
+      isS4: false,
+      isECC: false,
+      isS4InProgress: true,
+      source: 'evidence',
+      detection
+    };
+  }
+
+  if (detection.status === 'ecc' && detection.confidence !== 'baixa') {
+    console.log(`[SAP Status] Evidências indicam ECC`);
+    return {
+      isS4: false,
+      isECC: true,
+      isS4InProgress: false,
+      source: 'evidence',
+      detection
+    };
+  }
+
+  // 3. Se evidências são inconclusivas, usar formulário
   const formIsS4 = isClientOnS4HANA(sapStatusFromForm);
   const formIsECC = isClientOnECC(sapStatusFromForm);
-  
-  // Se o formulário indica CLARAMENTE S/4 ou ECC, usar isso
+
   if (formIsS4) {
     console.log(`[SAP Status] Formulário indica S/4HANA claramente`);
-    return { isS4: true, isECC: false, source: 'form' };
+    return {
+      isS4: true,
+      isECC: false,
+      isS4InProgress: false,
+      source: 'form',
+      detection
+    };
   }
+
   if (formIsECC) {
     console.log(`[SAP Status] Formulário indica ECC claramente`);
-    return { isS4: false, isECC: true, source: 'form' };
+    return {
+      isS4: false,
+      isECC: true,
+      isS4InProgress: false,
+      source: 'form',
+      detection
+    };
   }
-  
-  // 2. Se formulário é ambíguo (sap_services, unknown, etc), verificar evidências
-  const evidenceStatus = detectSapStatusFromEvidences(evidences);
-  
-  if (evidenceStatus === 's4hana') {
-    console.log(`[SAP Status Override] Formulário diz "${sapStatusFromForm}", mas evidências indicam S/4HANA`);
-    return { isS4: true, isECC: false, source: 'evidence' };
-  }
-  
-  if (evidenceStatus === 'ecc') {
-    console.log(`[SAP Status Override] Formulário diz "${sapStatusFromForm}", mas evidências indicam ECC`);
-    return { isS4: false, isECC: true, source: 'evidence' };
-  }
-  
-  // 3. Não foi possível determinar - assumir status ambíguo
+
+  // 4. Não foi possível determinar - assumir status ambíguo
   console.log(`[SAP Status] Status ambíguo - formulário: "${sapStatusFromForm}", sem evidências claras`);
-  return { isS4: false, isECC: false, source: 'unknown' };
+  return {
+    isS4: false,
+    isECC: false,
+    isS4InProgress: false,
+    source: 'unknown',
+    detection
+  };
 }
 
 // Verificar se uma dor é relacionada a migração S/4HANA
@@ -400,29 +618,51 @@ function isMigrationPain(pain: string): boolean {
 }
 
 function isSolutionCompatibleWithSapStatus(
-  solutionName: string, 
+  solutionName: string,
   sapStatus: string | undefined,
-  evidences?: { title: string; indication: string }[]
+  evidences?: { title: string; indication: string; category?: string }[]
 ): boolean {
-  // Se temos evidências, usar detecção inteligente
-  if (evidences && evidences.length > 0) {
-    const effectiveStatus = getEffectiveSapStatus(sapStatus, evidences);
-    
-    if (effectiveStatus.isS4 && isMigrationToS4Solution(solutionName)) {
-      console.log(`[SAP Filter] Status efetivo S/4HANA (via ${effectiveStatus.source}) - excluindo migração: "${solutionName}"`);
-      return false;
-    }
+  const isMigration = isMigrationToS4Solution(solutionName);
+
+  if (!isMigration) {
+    // Se não é solução de migração, sempre é compatível
     return true;
   }
-  
+
+  // É uma solução de migração - verificar se cliente já está em S/4HANA
+
+  // Se temos evidências, usar detecção inteligente (PRIORIDADE)
+  if (evidences && evidences.length > 0) {
+    const effectiveStatus = getEffectiveSapStatus(sapStatus, evidences);
+
+    if (effectiveStatus.isS4) {
+      console.log(`\n🚫 [SAP Filter] BLOQUEANDO "${solutionName}"`);
+      console.log(`   Motivo: Cliente JÁ ESTÁ em S/4HANA (detectado via ${effectiveStatus.source})`);
+      if (effectiveStatus.detection) {
+        console.log(`   Score: ${effectiveStatus.detection.score}, Confiança: ${effectiveStatus.detection.confidence}`);
+        console.log(`   Evidência: ${effectiveStatus.detection.evidenceSource}`);
+      }
+      return false;
+    }
+
+    // Se está em andamento, também não recomendar migração (já está migrando)
+    if (effectiveStatus.isS4InProgress) {
+      console.log(`\n🚫 [SAP Filter] BLOQUEANDO "${solutionName}"`);
+      console.log(`   Motivo: Cliente JÁ ESTÁ MIGRANDO para S/4HANA`);
+      return false;
+    }
+
+    return true;
+  }
+
   // Fallback: usar apenas o status do formulário
   if (!sapStatus) return true;
-  
-  if (isClientOnS4HANA(sapStatus) && isMigrationToS4Solution(solutionName)) {
-    console.log(`[SAP Filter] Cliente em S/4HANA (via form) - excluindo migração: "${solutionName}"`);
+
+  if (isClientOnS4HANA(sapStatus)) {
+    console.log(`\n🚫 [SAP Filter] BLOQUEANDO "${solutionName}" (formulário indica S/4HANA)`);
     return false;
   }
-  
+
   return true;
 }
 
@@ -503,20 +743,29 @@ const PAIN_EVIDENCE_MATRIX: PainEvidence[] = [
 ];
 
 function derivePainsFromContext(
-  evidences: { title: string; indication: string }[],
+  evidences: { title: string; indication: string; category?: string }[],
   industry: string | undefined,
   sapStatus: string | undefined,
   roleConfig: RoleConfig
 ): { pain: string; reason: string; confidence: 'alta' | 'media' | 'baixa' }[] {
   const pains: { pain: string; reason: string; confidence: 'alta' | 'media' | 'baixa' }[] = [];
   const addedPains = new Set<string>();
-  
+
   // IMPORTANTE: Usar detecção INTELIGENTE que combina formulário + evidências
   const effectiveStatus = getEffectiveSapStatus(sapStatus, evidences);
   const clientIsOnS4 = effectiveStatus.isS4;
   const clientIsOnECC = effectiveStatus.isECC;
-  
-  console.log(`[SAP Status] Formulário: "${sapStatus}" | Efetivo: É S/4: ${clientIsOnS4} | É ECC: ${clientIsOnECC} | Fonte: ${effectiveStatus.source}`);
+  const clientIsS4InProgress = effectiveStatus.isS4InProgress;
+
+  console.log(`\n[derivePainsFromContext] Status SAP Efetivo:`);
+  console.log(`  Formulário: "${sapStatus}"`);
+  console.log(`  É S/4 LIVE: ${clientIsOnS4}`);
+  console.log(`  É S/4 EM ANDAMENTO: ${clientIsS4InProgress}`);
+  console.log(`  É ECC: ${clientIsOnECC}`);
+  console.log(`  Fonte: ${effectiveStatus.source}`);
+  if (effectiveStatus.detection?.score) {
+    console.log(`  Score detecção: ${effectiveStatus.detection.score}`);
+  }
 
   // 1. Derivar dores das evidências encontradas
   for (const evidence of evidences) {
@@ -527,9 +776,9 @@ function derivePainsFromContext(
       if (patterns.some(p => combinedText.includes(p.toLowerCase()))) {
         for (const pain of matrix.typicalPains) {
           if (!addedPains.has(pain)) {
-            // NOVO: Filtrar dores de migração se cliente já está em S/4HANA
-            if (clientIsOnS4 && isMigrationPain(pain)) {
-              console.log(`[Pain Filter] Dor de migração excluída para cliente S/4: "${pain}"`);
+            // CRÍTICO: Filtrar dores de migração se cliente já está em S/4HANA ou migrando
+            if ((clientIsOnS4 || clientIsS4InProgress) && isMigrationPain(pain)) {
+              console.log(`🚫 [Pain Filter] Dor de migração BLOQUEADA (cliente ${clientIsOnS4 ? 'em S/4' : 'migrando'}): "${pain}"`);
               continue; // Pular esta dor
             }
             
@@ -551,30 +800,43 @@ function derivePainsFromContext(
     }
   }
 
-  // 2. Derivar dores do status SAP - CORRIGIDO com funções de detecção de enum
-  if (sapStatus) {
-    // Apenas para clientes ECC - sugerir migração
-    if (clientIsOnECC) {
-      if (!addedPains.has('deadline_2027')) {
-        addedPains.add('deadline_2027');
-        pains.push({
-          pain: 'Pressão pelo deadline 2027 de fim de suporte SAP ECC',
-          reason: `Status SAP atual: ${sapStatus}`,
-          confidence: 'alta'
-        });
-      }
+  // 2. Derivar dores do status SAP - USANDO DETECÇÃO INTELIGENTE
+  // Apenas para clientes ECC (NÃO em S/4 e NÃO migrando) - sugerir migração
+  if (clientIsOnECC && !clientIsOnS4 && !clientIsS4InProgress) {
+    if (!addedPains.has('deadline_2027')) {
+      addedPains.add('deadline_2027');
+      pains.push({
+        pain: 'Pressão pelo deadline 2027 de fim de suporte SAP ECC',
+        reason: `Status SAP: ECC (detectado via ${effectiveStatus.source})`,
+        confidence: 'alta'
+      });
+      console.log(`✅ [Pain] Adicionada dor de deadline 2027 (cliente em ECC)`);
     }
-    
-    // Para clientes em S/4 - sugerir otimização (NÃO migração)
-    if (clientIsOnS4) {
-      if (!addedPains.has('pos_golive')) {
-        addedPains.add('pos_golive');
-        pains.push({
-          pain: 'Otimização e estabilização do ambiente S/4HANA',
-          reason: `Status SAP atual: ${sapStatus}`,
-          confidence: 'media'
-        });
-      }
+  }
+
+  // Para clientes em S/4 LIVE - sugerir otimização (NÃO migração)
+  if (clientIsOnS4) {
+    if (!addedPains.has('pos_golive')) {
+      addedPains.add('pos_golive');
+      pains.push({
+        pain: 'Otimização e estabilização do ambiente S/4HANA pós-go-live',
+        reason: `S/4HANA detectado via ${effectiveStatus.source}${effectiveStatus.detection?.evidenceSource ? ` - "${effectiveStatus.detection.evidenceSource}"` : ''}`,
+        confidence: 'alta'
+      });
+      console.log(`✅ [Pain] Adicionada dor de otimização S/4 (cliente JÁ EM S/4HANA)`);
+    }
+  }
+
+  // Para clientes migrando - sugerir acompanhamento de projeto
+  if (clientIsS4InProgress) {
+    if (!addedPains.has('migracao_andamento')) {
+      addedPains.add('migracao_andamento');
+      pains.push({
+        pain: 'Acompanhamento e suporte ao projeto de migração S/4HANA em andamento',
+        reason: `Migração S/4HANA detectada em andamento via ${effectiveStatus.source}`,
+        confidence: 'alta'
+      });
+      console.log(`✅ [Pain] Adicionada dor de migração em andamento`);
     }
   }
 
@@ -647,7 +909,7 @@ interface CompanyContext {
   sapStatus?: string;
   industry?: string;
   companySize?: string;
-  evidences?: { title: string; indication: string }[];
+  evidences?: { title: string; indication: string; category?: string }[];
 }
 
 interface EnrichedSolutionMatch {
@@ -1046,7 +1308,7 @@ async function generateNewSolutions(
     sapStatus: string;
     companySize: string;
   },
-  evidences: { title: string; indication: string }[],
+  evidences: { title: string; indication: string; category?: string }[],
   cases: RankedCase[],
   roleConfig: RoleConfig
 ): Promise<GeneratedSolution[]> {
@@ -1538,10 +1800,21 @@ serve(async (req) => {
       }
     }
 
+    // CRÍTICO: Combinar TODAS as evidências com suas categorias para detecção de status SAP
+    // LinkedIn é especialmente importante pois geralmente contém informações mais recentes sobre go-live
+    const allEvidencesWithCategory = [
+      ...sapEvidences.map(e => ({ ...e, category: 'SAP' as const })),
+      ...techEvidences.map(e => ({ ...e, category: 'Tecnologia' as const })),
+      ...linkedinEvidences.map(e => ({ ...e, category: 'LinkedIn' as const }))
+    ];
+
+    console.log(`\n[Evidências Combinadas] Total: ${allEvidencesWithCategory.length}`);
+    console.log(`  SAP: ${sapEvidences.length}, Tech: ${techEvidences.length}, LinkedIn: ${linkedinEvidences.length}`);
+
     // 2.2 - Motor de Dores Prováveis
     console.log('Derivando dores prováveis...');
     const derivedPains = derivePainsFromContext(
-      realEvidences,
+      allEvidencesWithCategory, // Usar evidências combinadas com categorias
       leadData.industry,
       leadData.sapStatus,
       roleConfig
@@ -1568,7 +1841,7 @@ serve(async (req) => {
         sapStatus: leadData.sapStatus,
         industry: leadData.industry,
         companySize: leadData.companySize,
-        evidences: realEvidences
+        evidences: allEvidencesWithCategory // CRÍTICO: Usar evidências combinadas com categorias
       },
       rankedCases
     );
@@ -1595,7 +1868,7 @@ serve(async (req) => {
           sapStatus: leadData.sapStatus || '',
           companySize: leadData.companySize || ''
         },
-        realEvidences,
+        allEvidencesWithCategory, // CRÍTICO: Usar evidências combinadas com categorias
         rankedCases,
         roleConfig
       );
@@ -1952,7 +2225,10 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
       score: rc.score
     }));
 
-    // Adicionar metadados
+    // Executar detecção final para metadados (usando TODAS as evidências com categorias)
+    const finalSapDetection = getEffectiveSapStatus(leadData.sapStatus, allEvidencesWithCategory);
+
+    // Adicionar metadados com informações de detecção SAP
     playbook.metadata = {
       roleLevel: roleConfig.level,
       roleFocus: roleConfig.focus,
@@ -1961,8 +2237,37 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
       totalSolutions: playbook.metaSolutions.length,
       evidencesFound: realEvidences.length,
       existingSolutions: existingSolutions.length,
-      generatedSolutions: aiGeneratedSolutions.length
+      generatedSolutions: aiGeneratedSolutions.length,
+      // Informações de detecção de status SAP (para debug e transparência)
+      sapDetection: {
+        formStatus: leadData.sapStatus || 'não informado',
+        detectedStatus: finalSapDetection.detection?.status || 'unknown',
+        detectionConfidence: finalSapDetection.detection?.confidence || 'baixa',
+        detectionScore: finalSapDetection.detection?.score || 0,
+        detectionSource: finalSapDetection.source,
+        isS4Live: finalSapDetection.isS4,
+        isS4InProgress: finalSapDetection.isS4InProgress,
+        isECC: finalSapDetection.isECC,
+        matchedPatterns: finalSapDetection.detection?.matchedPatterns?.slice(0, 5) || [],
+        evidenceSource: finalSapDetection.detection?.evidenceSource || ''
+      }
     };
+
+    // Log final de detecção SAP
+    console.log(`\n========================================`);
+    console.log(`[RESULTADO FINAL DA DETECÇÃO SAP]`);
+    console.log(`  Empresa: ${leadData.company}`);
+    console.log(`  Status Formulário: ${leadData.sapStatus}`);
+    console.log(`  Status Detectado: ${finalSapDetection.detection?.status}`);
+    console.log(`  Confiança: ${finalSapDetection.detection?.confidence}`);
+    console.log(`  Score: ${finalSapDetection.detection?.score}`);
+    console.log(`  É S/4HANA LIVE: ${finalSapDetection.isS4}`);
+    console.log(`  É S/4HANA EM ANDAMENTO: ${finalSapDetection.isS4InProgress}`);
+    console.log(`  É ECC: ${finalSapDetection.isECC}`);
+    if (finalSapDetection.isS4) {
+      console.log(`  ⚠️ SOLUÇÕES DE MIGRAÇÃO FORAM BLOQUEADAS`);
+    }
+    console.log(`========================================\n`);
 
     // Salvar no histórico
     try {
