@@ -1,421 +1,208 @@
 
+# Plano: Filtrar Soluções de Migração S/4HANA para Clientes Já em S/4
 
-# Plano: Motor de Soluções Verdadeiramente Personalizado
+## Problema Identificado
 
-## Problema Atual
+Quando o lead já está em **S/4HANA**, o sistema ainda sugere soluções de **migração para S/4HANA**, o que não faz sentido já que o cliente já migrou.
 
-Após análise do código, identifiquei os problemas principais:
+### Pontos do código que precisam de correção:
 
-1. **Dependência exclusiva do banco de dados**: O sistema APENAS mapeia soluções existentes na tabela `meta_solutions`
-2. **Filtro de cargo quebrado**: Target roles no banco (`CEO`, `Gerente de TI`) não correspondem às categorias do filtro (`C-level`, `Gerente`)
-3. **Sem capacidade de criar soluções novas**: Se nenhuma solução do banco faz match, a seção fica vazia
-4. **Descrições ainda genéricas**: O prompt de personalização não está gerando contexto suficientemente específico
-5. **Falta sinalização de origem**: Não indica se a solução é "existente" ou "recomendação nova"
+1. **`findRelevantSolutionsEnriched`** (linha 659-677): Dá boost para soluções de migração quando cliente está em ECC, mas NÃO exclui essas soluções quando está em S/4
+2. **`generateNewSolutions`** (linha 894-901): O prompt menciona "Migração SAP S/4HANA" como capacidade da Meta IT, sem instruir a IA a não sugerir isso para quem já está em S/4
+3. **Filtro de soluções**: Não existe um filtro que exclua soluções incompatíveis com o status SAP atual
 
-## Nova Arquitetura: Motor de Soluções Híbrido
+## Solução Proposta
 
-O sistema terá dois modos de operação:
-
-1. **Modo 1 - Soluções Mapeadas**: Match com soluções existentes no banco (como hoje, mas melhorado)
-2. **Modo 2 - Soluções Geradas por IA**: Quando não há match suficiente, a IA cria soluções personalizadas baseadas nas dores
-
----
-
-## Estrutura do Novo Motor
+Implementar um **filtro de compatibilidade SAP** em 3 camadas:
 
 ```text
-INPUT:
-  - Dores prováveis
-  - Contexto do cliente
-  - Status SAP
-  - Evidências reais
-  - Cases ranqueados
-
-ETAPA 1: BUSCAR SOLUÇÕES EXISTENTES
-  - Para cada dor, buscar melhor match no banco
-  - Aplicar scoring multicritério
-  - Filtro de cargo corrigido
-
-ETAPA 2: IDENTIFICAR LACUNAS
-  - Dores sem solução mapeada (score < 0.35)
-  - Máximo de 3 lacunas identificadas
-
-ETAPA 3: GERAR SOLUÇÕES VIA IA
-  - Para lacunas, IA sugere solução personalizada
-  - Sinalizar como "NOVA RECOMENDACAO"
-  - Descrição 100% contextualizada
-
-ETAPA 4: COMBINAR E RANKEAR
-  - Mesclar soluções existentes + geradas
-  - Ordenar por urgência e score
-  - Top 7 soluções finais
-
-OUTPUT:
-  - Cada solução indica origem: "EXISTENTE" ou "NOVA"
-  - Descrição personalizada para TODAS
-  - Conexão com evidências e cases
+┌──────────────────────────────────────────────────────────────────────────┐
+│                    FILTRO DE COMPATIBILIDADE SAP                         │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  CAMADA 1: Filtro de Soluções Existentes                                │
+│  ├── Se isS4 = true                                                      │
+│  │   └── Excluir soluções cujo nome contém:                              │
+│  │       "migração", "conversão s/4", "brownfield", "greenfield"         │
+│  └── Se isECC = true                                                     │
+│      └── Boost para essas soluções (já implementado)                     │
+│                                                                          │
+│  CAMADA 2: Ajuste no Prompt de Geração                                   │
+│  ├── Se isS4 = true                                                      │
+│  │   └── Adicionar regra: "NÃO sugira migração S/4HANA,                  │
+│  │       pois o cliente já está nesta versão"                            │
+│  └── Atualizar lista de capacidades dinamicamente                       │
+│                                                                          │
+│  CAMADA 3: Validação de Saída                                            │
+│  ├── Após geração via IA                                                 │
+│  │   └── Filtrar soluções que mencionem migração S/4 se isS4            │
+│  └── Log de soluções descartadas para debug                              │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
-
----
 
 ## Alterações Detalhadas
 
-### 1. Corrigir Filtro de Cargo
+### 1. Nova Função Auxiliar: Verificar Compatibilidade com Status SAP
 
-**Arquivo**: `supabase/functions/generate-playbook/index.ts`
-
-O problema é que `sol.target_roles` contém valores como `["CEO", "CFO", "Gerente de TI"]` mas o código tenta comparar com `["C-level", "Gerente"]`.
+Adicionar no início do arquivo (após as interfaces):
 
 ```typescript
-// NOVO: Mapeamento de target_roles específicos para categorias
-const ROLE_CATEGORY_MAP: Record<string, string[]> = {
-  'C-level': ['CEO', 'CFO', 'CIO', 'CTO', 'COO', 'Presidente', 'VP'],
-  'Diretor': ['Diretor', 'Director', 'Head', 'VP de'],
-  'Gerente': ['Gerente', 'Manager', 'Gestor', 'Coordenador', 'Controller'],
-  'Especialista': ['Especialista', 'Analista', 'Consultor', 'Arquiteto', 'Engenheiro'],
-  'Key User': ['Key User', 'Usuário', 'Operador', 'Assistente']
-};
+// Palavras-chave de soluções de MIGRAÇÃO para S/4HANA
+const S4_MIGRATION_KEYWORDS = [
+  'migração s/4',
+  'migração s4',
+  'migração para s/4',
+  'conversão s/4',
+  'conversão s4',
+  'brownfield',
+  'greenfield',
+  'upgrade para s/4',
+  'move to s/4',
+  'journey to s/4',
+  'transição para s/4'
+];
 
-function targetRoleMatchesCategory(targetRole: string, category: string): boolean {
-  const patterns = ROLE_CATEGORY_MAP[category] || [];
-  const targetLower = targetRole.toLowerCase();
-  return patterns.some(pattern => targetLower.includes(pattern.toLowerCase()));
+function isMigrationToS4Solution(solutionName: string): boolean {
+  const nameLower = solutionName.toLowerCase();
+  return S4_MIGRATION_KEYWORDS.some(keyword => nameLower.includes(keyword));
 }
 
-// Na função findRelevantSolutionsEnriched:
-const filteredSolutions = solutions.filter((sol) => {
+function isSolutionCompatibleWithSapStatus(
+  solutionName: string, 
+  sapStatus: string | undefined
+): boolean {
+  if (!sapStatus) return true; // Se não soubermos o status, permitir tudo
+  
+  const sapLower = sapStatus.toLowerCase();
+  const isS4 = sapLower.includes('s/4') || sapLower.includes('s4hana');
+  
+  // Se cliente está em S/4HANA, excluir soluções de migração PARA S/4
+  if (isS4 && isMigrationToS4Solution(solutionName)) {
+    return false;
+  }
+  
+  return true;
+}
+```
+
+### 2. Modificar `findRelevantSolutionsEnriched` - Aplicar Filtro
+
+Na linha 587-594, após o filtro de cargo, adicionar filtro de compatibilidade SAP:
+
+```typescript
+// Filtrar soluções por cargo - CORRIGIDO com mapeamento
+const filteredByRole = solutions.filter((sol: MetaSolution) => {
   if (!sol.target_roles || sol.target_roles.length === 0) return true;
-  return sol.target_roles.some(targetRole => 
+  return sol.target_roles.some((targetRole: string) => 
     roleNames.some(category => targetRoleMatchesCategory(targetRole, category))
   );
 });
+
+// NOVO: Filtrar soluções incompatíveis com status SAP
+const filteredSolutions = filteredByRole.filter((sol: MetaSolution) => {
+  const isCompatible = isSolutionCompatibleWithSapStatus(sol.name, companyContext.sapStatus);
+  if (!isCompatible) {
+    console.log(`Solução "${sol.name}" excluída - incompatível com status SAP: ${companyContext.sapStatus}`);
+  }
+  return isCompatible;
+});
+
+console.log(`Soluções filtradas por cargo: ${filteredByRole.length}, após filtro SAP: ${filteredSolutions.length}`);
 ```
 
-### 2. Novo Prompt Otimizado para Geração de Soluções
+### 3. Modificar `generateNewSolutions` - Ajustar Prompt
 
-Usando as melhores práticas de engenharia de prompt:
+Atualizar a seção de regras do prompt (linha 894-902) para ser dinâmica:
 
 ```typescript
-const SOLUTION_GENERATION_PROMPT = `
-<role>
-Você é um arquiteto de soluções SAP sênior da Meta IT com 15+ anos de experiência 
-em projetos de transformação digital. Sua especialidade é criar propostas de valor 
-personalizadas que conectam dores de negócio a soluções tecnológicas concretas.
-</role>
+// Construir lista de capacidades baseada no status SAP
+let metaCapabilities = [
+  'AMS (Application Management Services)',
+  'Outsourcing de equipe SAP',
+  'SAP BTP e integrações',
+  'Adequação à Reforma Tributária',
+  'Rollouts internacionais',
+  'Consultoria e diagnósticos'
+];
 
-<context>
-CLIENTE EM ANÁLISE:
-- Empresa: {{company}}
-- Setor: {{industry}}
-- Porte: {{companySize}}
-- Status SAP Atual: {{sapStatus}}
-- Cargo do Lead: {{role}} (Perfil: {{roleProfile}})
-
-CENÁRIO IDENTIFICADO:
-{{scenarioAnalysis}}
-
-EVIDÊNCIAS REAIS ENCONTRADAS:
-{{evidencesList}}
-
-DORES SEM SOLUÇÃO MAPEADA:
-{{unmappedPains}}
-
-SOLUÇÕES JÁ MAPEADAS (evitar duplicação):
-{{mappedSolutions}}
-
-CASES DE SUCESSO RELEVANTES:
-{{relevantCases}}
-</context>
-
-<task>
-Para cada dor sem solução mapeada, crie UMA solução personalizada seguindo estas regras:
-</task>
-
-<rules>
-1. ESPECIFICIDADE OBRIGATÓRIA:
-   - Mencione o nome da empresa
-   - Conecte com evidência real quando disponível
-   - Referencie case similar se existir
-   - Use números e prazos realistas
-
-2. ESTRUTURA DA SOLUÇÃO:
-   - Nome: Título claro e profissional (sem genéricos)
-   - Descrição: 2-3 frases explicando COMO resolve AQUELA dor
-   - Benefícios: 3 benefícios específicos para o contexto
-   - Tipo: "diagnostico" | "projeto" | "servico_continuo"
-   - Prazo estimado: Realista para o escopo
-
-3. LINGUAGEM:
-   - Adaptar para {{languageStyle}}
-   - Focar em: {{focusAreas}}
-   - Evitar: {{avoidTopics}}
-
-4. REALISMO:
-   - Só sugerir o que a Meta IT realmente pode entregar
-   - Considerar capacidades: SAP S/4HANA, AMS, Outsourcing, BTP, 
-     Reforma Tributária, Rollouts, Consultoria
-</rules>
-
-<output_format>
-Retorne um JSON array com objetos:
-{
-  "pain": "dor original",
-  "solution": "nome da solução proposta",
-  "description": "descrição personalizada",
-  "benefits": ["benefício 1", "benefício 2", "benefício 3"],
-  "type": "diagnostico|projeto|servico_continuo",
-  "estimatedTimeline": "prazo estimado",
-  "connectionToEvidence": "como conecta com evidência (ou null)",
-  "connectionToCase": "case similar (ou null)",
-  "isNew": true
-}
-</output_format>
-
-<examples>
-EXEMPLO RUIM (genérico):
-{
-  "solution": "Consultoria SAP",
-  "description": "Oferecemos consultoria para melhorar seus processos SAP."
+// Adicionar migração APENAS se não estiver em S/4HANA
+if (!isS4) {
+  metaCapabilities.unshift('Migração SAP S/4HANA (Brownfield/Greenfield)');
 }
 
-EXEMPLO BOM (personalizado):
-{
-  "solution": "Diagnóstico de Prontidão para Migração S/4HANA - {{company}}",
-  "description": "Para a {{company}}, que está em SAP ECC e enfrenta o deadline de 2027, 
-  propomos um diagnóstico de 3 semanas para mapear customizações críticas, integrações 
-  existentes e definir o roadmap ideal de migração. Similar ao que fizemos na Bruning, 
-  onde identificamos 40% de código obsoleto que pôde ser descartado.",
-  "benefits": [
-    "Clareza sobre investimento necessário em 3 semanas",
-    "Identificação de quick wins e riscos antecipados",
-    "Roadmap priorizado alinhado ao deadline 2027"
-  ],
-  "type": "diagnostico",
-  "estimatedTimeline": "3 semanas",
-  "connectionToEvidence": "Baseado na evidência de vagas SAP abertas",
-  "connectionToCase": "Similar ao diagnóstico da Bruning",
-  "isNew": true
+// Adicionar capacidades pós-migração se estiver em S/4HANA
+if (isS4) {
+  metaCapabilities.push(
+    'Otimização e tuning de S/4HANA',
+    'Estabilização pós-go-live',
+    'Rollout de novas funcionalidades S/4',
+    'Expansão de módulos SAP'
+  );
 }
-</examples>
-`;
+
+// No prompt, substituir a seção de capacidades:
+const capabilitiesText = metaCapabilities.map(c => `   - ${c}`).join('\n');
 ```
 
-### 3. Função de Geração de Soluções Novas
+E adicionar regra explícita no prompt quando isS4:
 
 ```typescript
-async function generateNewSolutions(
-  unmappedPains: { pain: string; reason: string; confidence: string }[],
-  mappedSolutions: EnrichedSolutionMatch[],
-  context: {
-    company: string;
-    industry: string;
-    role: string;
-    sapStatus: string;
-    companySize: string;
-  },
-  evidences: Evidence[],
-  cases: RankedCase[],
-  roleConfig: RoleConfig
-): Promise<GeneratedSolution[]> {
-  if (unmappedPains.length === 0) return [];
-  
-  // Limitar a 3 soluções novas para não sobrecarregar
-  const painsToSolve = unmappedPains.slice(0, 3);
-  
-  // Construir prompt com contexto rico
-  const scenarioAnalysis = buildScenarioAnalysis(context, evidences);
-  const evidencesList = evidences.map(e => `- ${e.title}: ${e.indication}`).join('\n');
-  const mappedSolutionsList = mappedSolutions.map(s => s.solution.name).join(', ');
-  const casesList = cases.map(c => `- ${c.case.company_name}: ${c.case.title}`).join('\n');
-  
-  const prompt = SOLUTION_GENERATION_PROMPT
-    .replace(/{{company}}/g, context.company)
-    .replace(/{{industry}}/g, context.industry)
-    .replace(/{{companySize}}/g, context.companySize)
-    .replace(/{{sapStatus}}/g, context.sapStatus)
-    .replace(/{{role}}/g, context.role)
-    .replace('{{roleProfile}}', getRoleProfile(roleConfig))
-    .replace('{{scenarioAnalysis}}', scenarioAnalysis)
-    .replace('{{evidencesList}}', evidencesList || 'Nenhuma evidência específica')
-    .replace('{{unmappedPains}}', painsToSolve.map(p => `- ${p.pain} (${p.confidence})`).join('\n'))
-    .replace('{{mappedSolutions}}', mappedSolutionsList || 'Nenhuma')
-    .replace('{{relevantCases}}', casesList || 'Nenhum case específico')
-    .replace('{{languageStyle}}', roleConfig.language)
-    .replace('{{focusAreas}}', roleConfig.priorityTopics.join(', '))
-    .replace('{{avoidTopics}}', roleConfig.excludeTopics.join(', '));
+// Regras adicionais baseadas no contexto
+let additionalRules = '';
+if (isS4) {
+  additionalRules = `
+5. RESTRIÇÃO CRÍTICA: O cliente JÁ ESTÁ EM S/4HANA. 
+   - NÃO sugira migração, conversão ou upgrade para S/4HANA
+   - Foque em: otimização, estabilização, novos módulos, integrações, BTP
+   - Válido: AMS, Outsourcing, Rollouts, Reforma Tributária, expansões`;
+}
+```
 
-  // Chamar IA com tool calling para estrutura garantida
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-3-flash-preview',
-      messages: [
-        { role: 'system', content: 'Você é um arquiteto de soluções SAP. Responda APENAS com JSON válido.' },
-        { role: 'user', content: prompt }
-      ],
-      tools: [{
-        type: 'function',
-        function: {
-          name: 'generate_custom_solutions',
-          description: 'Gera soluções personalizadas para dores não mapeadas',
-          parameters: {
-            type: 'object',
-            properties: {
-              solutions: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    pain: { type: 'string' },
-                    solution: { type: 'string' },
-                    description: { type: 'string' },
-                    benefits: { type: 'array', items: { type: 'string' } },
-                    type: { type: 'string', enum: ['diagnostico', 'projeto', 'servico_continuo'] },
-                    estimatedTimeline: { type: 'string' },
-                    connectionToEvidence: { type: 'string' },
-                    connectionToCase: { type: 'string' }
-                  },
-                  required: ['pain', 'solution', 'description', 'benefits', 'type']
-                }
-              }
-            },
-            required: ['solutions']
-          }
-        }
-      }],
-      tool_choice: { type: 'function', function: { name: 'generate_custom_solutions' } }
-    }),
+### 4. Adicionar Validação de Saída das Soluções Geradas
+
+Após a geração via IA (linha 979-982), filtrar resultados:
+
+```typescript
+if (parsed.solutions && Array.isArray(parsed.solutions)) {
+  // NOVO: Filtrar soluções incompatíveis geradas pela IA
+  const compatibleSolutions = parsed.solutions.filter((sol: GeneratedSolution) => {
+    const isCompatible = isSolutionCompatibleWithSapStatus(sol.solution, context.sapStatus);
+    if (!isCompatible) {
+      console.log(`Solução gerada "${sol.solution}" descartada - incompatível com S/4HANA`);
+    }
+    return isCompatible;
   });
   
-  // Processar resposta e retornar soluções geradas
-  // ... parsing e validação
+  console.log(`Soluções geradas via IA: ${parsed.solutions.length}, compatíveis: ${compatibleSolutions.length}`);
+  return compatibleSolutions;
 }
 ```
 
-### 4. Novo Tipo para Indicar Origem da Solução
+## Resumo das Alterações por Arquivo
 
-**Arquivo**: `src/types/playbook.types.ts`
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/generate-playbook/index.ts` | 4 modificações |
 
-```typescript
-export interface MetaSolution {
-  pain: string;
-  painConfidence?: 'alta' | 'media' | 'baixa';
-  solution: string;
-  description: string;
-  personalizedDescription?: string;
-  benefits?: string[];
-  matchReason?: string;
-  matchReasons?: string[];
-  matchScore?: number;
-  relatedEvidence?: string;
-  relatedCase?: string;
-  urgencyLevel?: 'critical' | 'high' | 'medium' | 'low';
-  
-  // NOVO: Indicador de origem
-  solutionOrigin: 'existing' | 'generated';
-  solutionType?: 'diagnostico' | 'projeto' | 'servico_continuo';
-  estimatedTimeline?: string;
-}
-```
+### Modificações específicas:
 
-### 5. Atualizar UI para Mostrar Origem
-
-**Arquivo**: `src/components/Playbook/PlaybookView.tsx`
-
-Adicionar badge visual para indicar se a solução é existente ou nova recomendação:
-
-```text
-Soluções existentes:
-  [SOLUÇÃO VALIDADA] - Badge verde
-  - Indica que é uma solução que já entregamos antes
-  
-Soluções novas:
-  [NOVA RECOMENDAÇÃO] - Badge amarelo/dourado
-  - Indica que é uma sugestão personalizada da IA
-  - Inclui ícone de "lightbulb" ou "sparkle"
-```
-
----
-
-## Fluxo Completo Atualizado
-
-```text
-ENTRADA: Lead com dores identificadas
-
-  1. BUSCAR SOLUÇÕES EXISTENTES
-     ├── Aplicar scoring multicritério
-     ├── Filtrar por cargo (CORRIGIDO)
-     └── Threshold: 0.35
-
-  2. IDENTIFICAR LACUNAS
-     ├── Dores com score < 0.35
-     └── Máximo 3 lacunas
-
-  3. SE HOUVER LACUNAS:
-     ├── Gerar prompt personalizado
-     ├── Chamar IA com contexto rico
-     └── Criar soluções novas
-
-  4. COMBINAR RESULTADOS
-     ├── Soluções existentes (origin: 'existing')
-     ├── Soluções geradas (origin: 'generated')
-     └── Ordenar por urgência + score
-
-  5. PERSONALIZAR DESCRIÇÕES
-     ├── Para TODAS as soluções (existentes + novas)
-     └── Batch call para eficiência
-
-  6. OUTPUT FINAL
-     ├── 5-7 soluções ranqueadas
-     ├── Cada uma com origem identificada
-     └── Descrição 100% personalizada
-```
-
----
-
-## Arquivos a Modificar
-
-1. **`supabase/functions/generate-playbook/index.ts`**
-   - Corrigir filtro de cargo com `ROLE_CATEGORY_MAP`
-   - Adicionar função `generateNewSolutions()`
-   - Integrar soluções existentes + geradas
-   - Novo prompt otimizado
-
-2. **`src/types/playbook.types.ts`**
-   - Adicionar campo `solutionOrigin`
-   - Adicionar campo `solutionType`
-   - Adicionar campo `estimatedTimeline`
-
-3. **`src/components/Playbook/PlaybookView.tsx`**
-   - Badge visual para origem
-   - Exibir timeline quando disponível
-   - Melhorar layout para soluções novas
-
----
+1. **Linha ~200**: Adicionar constante `S4_MIGRATION_KEYWORDS` e funções auxiliares
+2. **Linha ~587**: Adicionar filtro de compatibilidade SAP após filtro de cargo
+3. **Linha ~820-900**: Tornar prompt dinâmico baseado no status SAP
+4. **Linha ~979**: Adicionar validação de saída para soluções geradas
 
 ## Resultado Esperado
 
-| Cenário | Antes | Depois |
-|---------|-------|--------|
-| Dor com match no banco | Descrição genérica | Descrição personalizada + "SOLUÇÃO VALIDADA" |
-| Dor sem match no banco | Seção vazia | Solução gerada por IA + "NOVA RECOMENDAÇÃO" |
-| Filtro de cargo | Não funciona | Funciona corretamente |
-| Total de soluções | 0-5 | 5-7 (sempre) |
-| Origem clara | Não | Sim, com badge visual |
+| Status SAP | Antes | Depois |
+|------------|-------|--------|
+| S/4HANA | Sugere migração S/4HANA | Sugere otimização, AMS, BTP, expansões |
+| ECC | Sugere migração (correto) | Mantém igual |
+| Não informado | Sugere tudo | Mantém igual |
 
----
+## Logs de Debug
 
-## Estimativa de Esforço
-
-- Correção do filtro de cargo: 15 min
-- Função de geração de soluções: 45 min
-- Prompt otimizado: 30 min
-- Atualização da UI: 30 min
-- Testes e ajustes: 20 min
-
-**Total: ~2.5 horas**
-
+O sistema irá logar:
+- Soluções excluídas por incompatibilidade SAP
+- Quantidade antes e depois do filtro
+- Soluções geradas pela IA que foram descartadas
