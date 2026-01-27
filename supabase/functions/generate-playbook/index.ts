@@ -229,17 +229,70 @@ function isMigrationToS4Solution(solutionName: string): boolean {
   return S4_MIGRATION_KEYWORDS.some(keyword => nameLower.includes(keyword));
 }
 
+// Padrões de dores de migração que NÃO devem aparecer para clientes S/4HANA
+const MIGRATION_PAIN_PATTERNS = [
+  'migração',
+  'deadline 2027',
+  'fim de suporte',
+  'suporte ecc',
+  'upgrade para s/4',
+  'conversão para s/4',
+  'planejamento de roadmap de migração',
+  'antes do fim de suporte'
+];
+
+// Verificar se cliente está em S/4HANA - usa valores exatos do enum
+function isClientOnS4HANA(sapStatus: string | undefined): boolean {
+  if (!sapStatus) return false;
+  
+  const sapLower = sapStatus.toLowerCase().trim();
+  
+  // 1. Verificar valor exato do enum do frontend
+  if (sapLower === 's4hana') return true;
+  
+  // 2. Verificar se a string contém indicadores de S/4 (para texto livre)
+  if (sapLower.includes('s/4') || 
+      sapLower.includes('s4 hana') ||
+      sapLower.includes('s/4hana') ||
+      (sapLower.includes('s4') && sapLower.includes('hana'))) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Verificar se cliente está em ECC - usa valores exatos do enum
+function isClientOnECC(sapStatus: string | undefined): boolean {
+  if (!sapStatus) return false;
+  
+  const sapLower = sapStatus.toLowerCase().trim();
+  
+  // 1. Verificar valor exato do enum do frontend
+  if (sapLower === 'sap_ecc') return true;
+  
+  // 2. Verificar se a string contém indicadores de ECC (para texto livre)
+  if (sapLower.includes('ecc') || sapLower.includes('r/3')) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Verificar se uma dor é relacionada a migração S/4HANA
+function isMigrationPain(pain: string): boolean {
+  const painLower = pain.toLowerCase();
+  return MIGRATION_PAIN_PATTERNS.some(p => painLower.includes(p));
+}
+
 function isSolutionCompatibleWithSapStatus(
   solutionName: string, 
   sapStatus: string | undefined
 ): boolean {
   if (!sapStatus) return true; // Se não soubermos o status, permitir tudo
   
-  const sapLower = sapStatus.toLowerCase();
-  const isS4 = sapLower.includes('s/4') || sapLower.includes('s4hana');
-  
   // Se cliente está em S/4HANA, excluir soluções de migração PARA S/4
-  if (isS4 && isMigrationToS4Solution(solutionName)) {
+  if (isClientOnS4HANA(sapStatus) && isMigrationToS4Solution(solutionName)) {
+    console.log(`[SAP Filter] Cliente em S/4HANA - excluindo migração: "${solutionName}"`);
     return false;
   }
   
@@ -330,6 +383,12 @@ function derivePainsFromContext(
 ): { pain: string; reason: string; confidence: 'alta' | 'media' | 'baixa' }[] {
   const pains: { pain: string; reason: string; confidence: 'alta' | 'media' | 'baixa' }[] = [];
   const addedPains = new Set<string>();
+  
+  // IMPORTANTE: Verificar status SAP para filtrar dores irrelevantes
+  const clientIsOnS4 = isClientOnS4HANA(sapStatus);
+  const clientIsOnECC = isClientOnECC(sapStatus);
+  
+  console.log(`[SAP Status] Valor: "${sapStatus}" | É S/4: ${clientIsOnS4} | É ECC: ${clientIsOnECC}`);
 
   // 1. Derivar dores das evidências encontradas
   for (const evidence of evidences) {
@@ -340,6 +399,12 @@ function derivePainsFromContext(
       if (patterns.some(p => combinedText.includes(p.toLowerCase()))) {
         for (const pain of matrix.typicalPains) {
           if (!addedPains.has(pain)) {
+            // NOVO: Filtrar dores de migração se cliente já está em S/4HANA
+            if (clientIsOnS4 && isMigrationPain(pain)) {
+              console.log(`[Pain Filter] Dor de migração excluída para cliente S/4: "${pain}"`);
+              continue; // Pular esta dor
+            }
+            
             // Filtrar por cargo
             const shouldExclude = roleConfig.excludeTopics.some(topic => 
               pain.toLowerCase().includes(topic.toLowerCase())
@@ -358,10 +423,10 @@ function derivePainsFromContext(
     }
   }
 
-  // 2. Derivar dores do status SAP
+  // 2. Derivar dores do status SAP - CORRIGIDO com funções de detecção de enum
   if (sapStatus) {
-    const sapLower = sapStatus.toLowerCase();
-    if (sapLower.includes('ecc') || sapLower.includes('r/3')) {
+    // Apenas para clientes ECC - sugerir migração
+    if (clientIsOnECC) {
       if (!addedPains.has('deadline_2027')) {
         addedPains.add('deadline_2027');
         pains.push({
@@ -371,7 +436,9 @@ function derivePainsFromContext(
         });
       }
     }
-    if (sapLower.includes('s/4') || sapLower.includes('s4')) {
+    
+    // Para clientes em S/4 - sugerir otimização (NÃO migração)
+    if (clientIsOnS4) {
       if (!addedPains.has('pos_golive')) {
         addedPains.add('pos_golive');
         pains.push({
