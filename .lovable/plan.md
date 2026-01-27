@@ -1,140 +1,273 @@
 
-# Plano: Cadastro Completo dos Cases de Sucesso da Meta IT
+# Plano: Reestruturação da Seção "Como a Meta IT Pode Ajudar"
 
-## Resumo
+## Problema Identificado
 
-Vou cadastrar **18 cases de sucesso** extraídos do site oficial da Meta IT na tabela `meta_cases`. Os cases estão divididos em:
-- **7 cases detalhados** (com informações completas)
-- **11 cases em preparação** (com informações básicas)
+Após análise detalhada do código, identifiquei que a seção "4. Como a Meta IT Pode Ajudar" possui várias deficiências:
 
-## Cases a Cadastrar
+1. **Mapeamento por keywords simples**: O algoritmo atual faz match por palavras-chave entre `related_pains` e a dor identificada, o que resulta em associações fracas ou irrelevantes
+2. **Score de match baixo**: O threshold mínimo de 0.3 permite soluções com baixa aderência
+3. **Falta de análise contextual profunda**: Não considera o cenário completo do cliente (setor + cargo + status SAP + evidências) de forma integrada
+4. **Descrição genérica**: A descrição da solução vem diretamente do banco (`expected_result`) sem personalização para o contexto
+5. **Limite de 5 soluções**: Mesmo com muitas dores identificadas, apenas 5 soluções são mostradas
 
-### Cases Detalhados (7)
+## Solução Proposta
 
-| # | Empresa | Setor | Tipo de Projeto |
-|---|---------|-------|-----------------|
-| 1 | Bruning | Industrial/Metalmecânico | Atualização S/4HANA + Reforma Tributária |
-| 2 | Cocatrel | Agronegócio/Laticínios | Automação Industrial + S/4HANA |
-| 3 | Meta | Tecnologia | Transformação Digital Interna |
-| 4 | Tromink | Agronegócio/Industrial | Implementação S/4HANA |
-| 5 | Argenta | Combustíveis | Implementação S/4HANA Rise |
-| 6 | Supera Farma | Farmacêutico | Implementação S/4HANA Rise |
-| 7 | Lavoro | Agronegócio | Rollout + AMS |
+Criar um **motor de recomendação inteligente** que:
+- Analisa o contexto completo do cliente
+- Usa IA para gerar descrições personalizadas de como cada solução resolve a dor específica
+- Prioriza soluções com base em critérios mais sofisticados
 
-### Cases em Preparação (11)
-
-| # | Empresa | Setor | Título |
-|---|---------|-------|--------|
-| 8 | Paradise Mobile | Tecnologia | 5G tecnologia e inovação |
-| 9 | V4 | Financeiro | Preparação para IPO |
-| 10 | Sicoob | Financeiro | Redução de R$3M em custos |
-| 11 | TJ-RS | Setor Público | Transformação digital |
-| 12 | Min. Justiça | Setor Público | Vanguarda digital |
-| 13 | CRT-BA | Setor Público | DX para órgãos públicos |
-| 14 | Olist | Tecnologia | Unicórnio brasileiro |
-| 15 | Bruning (v2) | Industrial | Atualização S/4HANA |
-| 16 | TV Globo | Mídia | Transformação ágil |
-| 17 | Sicredi | Financeiro | BPO |
-| 18 | Banco Original | Financeiro | Transformação ágil |
-
-## Mapeamento de Campos
-
-Cada case será cadastrado seguindo a estrutura da tabela `meta_cases`:
+## Arquitetura da Solução
 
 ```text
-┌────────────────────────────────────────────────────────────────┐
-│  CAMPOS OBRIGATÓRIOS                                           │
-├────────────────────────────────────────────────────────────────┤
-│  company_name     → Nome da Empresa (ex: "Bruning")            │
-│  industry         → Setor principal (ex: "Industrial")         │
-│  industry_keywords→ Keywords do setor ["metalmecânico", ...]   │
-│  title            → Título do case                             │
-│  description      → Descrição completa (min 50 palavras)       │
-│  results          → Array de resultados obtidos                │
-│  sap_solutions    → Soluções SAP utilizadas ["S/4HANA", ...]   │
-├────────────────────────────────────────────────────────────────┤
-│  CAMPOS OPCIONAIS                                              │
-├────────────────────────────────────────────────────────────────┤
-│  company_size     → Porte (pequeno/medio/grande/enterprise)    │
-│  sap_modules      → Módulos SAP ["MM", "FI", ...]              │
-│  challenge        → Desafio do cliente                         │
-│  solution         → Solução aplicada pela Meta                 │
-│  key_result       → Resultado principal destacado              │
-│  project_type     → Tipo de projeto (implementacao/migracao)   │
-│  case_url         → Link do case no site                       │
-│  country          → País ("Brasil")                            │
-│  is_active        → true (para cases detalhados)               │
-│                   → false (para cases em preparação)           │
-└────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     NOVO MOTOR DE SOLUÇÕES                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  INPUT:                                                                 │
+│  ├── Dores Prováveis (seção 3)                                          │
+│  ├── Evidências Encontradas (seção 2)                                   │
+│  ├── Contexto do Lead (cargo, empresa, setor)                           │
+│  ├── Status SAP (ECC, S/4HANA, etc)                                     │
+│  └── Cases Ranqueados (seção 5)                                         │
+│                                                                         │
+│  PROCESSAMENTO:                                                         │
+│  ├── 1. ANÁLISE CONTEXTUAL                                              │
+│  │   ├── Determinar prioridades baseadas em status SAP                  │
+│  │   ├── Identificar urgências (deadline 2027, reforma tributária)      │
+│  │   └── Correlacionar com evidências reais                             │
+│  │                                                                      │
+│  ├── 2. SCORING INTELIGENTE                                             │
+│  │   ├── Match direto dor-solução (0.4)                                 │
+│  │   ├── Contexto SAP (0.25)                                            │
+│  │   ├── Evidências confirmam necessidade (0.2)                         │
+│  │   ├── Setor compatível (0.1)                                         │
+│  │   └── Cargo alinhado (0.05)                                          │
+│  │                                                                      │
+│  └── 3. GERAÇÃO PERSONALIZADA VIA IA                                    │
+│      ├── Para cada solução top, gerar descrição personalizada           │
+│      ├── Explicar COMO a solução resolve AQUELA dor específica          │
+│      └── Conectar com evidências reais do cliente                       │
+│                                                                         │
+│  OUTPUT:                                                                │
+│  ├── 5-7 soluções ranqueadas                                            │
+│  ├── Descrição personalizada para o contexto                            │
+│  ├── Conexão explícita com dores e evidências                           │
+│  └── Score de match transparente                                        │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## Alterações Detalhadas
+
+### 1. Reestruturar o Motor de Soluções (Edge Function)
+
+**Arquivo**: `supabase/functions/generate-playbook/index.ts`
+
+Substituir a função `findRelevantSolutions` por uma versão mais inteligente:
+
+```typescript
+// Novos critérios de scoring
+const SOLUTION_SCORING = {
+  painMatch: {
+    exact: 0.40,      // Match exato de dor mapeada
+    partial: 0.25,    // Match parcial por keywords
+    semantic: 0.30    // Match semântico via IA
+  },
+  context: {
+    sapStatus: 0.25,  // ECC -> prioriza migração
+    urgency: 0.15,    // Deadline 2027, reforma tributária
+    evidence: 0.20    // Evidência confirma necessidade
+  },
+  alignment: {
+    industry: 0.10,   // Setor compatível
+    role: 0.05        // Cargo alinhado
+  }
+};
+```
+
+### 2. Novo Prompt para Geração de Descrições Personalizadas
+
+Em vez de usar apenas `expected_result`, enviar um prompt à IA que:
+- Recebe o contexto completo do cliente
+- Explica como a solução resolve a dor específica
+- Conecta com evidências reais
+
+```typescript
+const solutionPrompt = `
+Você é um consultor SAP sênior da Meta IT. 
+Explique em 2-3 frases como esta solução ajuda este cliente específico.
+
+CLIENTE:
+- Empresa: ${leadData.company}
+- Setor: ${leadData.industry}
+- Status SAP: ${leadData.sapStatus}
+- Cargo do Lead: ${leadData.role}
+
+DOR IDENTIFICADA:
+${pain}
+
+EVIDÊNCIA QUE CONFIRMA:
+${evidenceText}
+
+SOLUÇÃO META IT:
+${solution.name}: ${solution.description}
+
+INSTRUÇÕES:
+- Seja específico para o contexto deste cliente
+- Mencione o benefício principal
+- Conecte com a evidência se possível
+- Linguagem ${roleConfig.language}
+`;
+```
+
+### 3. Novo Tipo de Dados para Soluções Enriquecidas
+
+**Arquivo**: `src/types/playbook.types.ts`
+
+```typescript
+export interface EnrichedMetaSolution {
+  pain: string;                    // Dor que resolve
+  painConfidence: 'alta' | 'media' | 'baixa';
+  solution: string;                // Nome da solução
+  personalizedDescription: string; // Descrição gerada por IA
+  genericDescription: string;      // Descrição padrão (fallback)
+  benefits: string[];              // Top 3 benefícios
+  matchScore: number;              // Score de compatibilidade (0-1)
+  matchReasons: string[];          // Motivos do match
+  relatedEvidence?: string;        // Evidência que confirma
+  relatedCase?: string;            // Case similar
+  urgencyLevel?: 'critical' | 'high' | 'medium' | 'low';
+}
+```
+
+### 4. Atualizar Interface do Playbook
+
+**Arquivo**: `src/components/Playbook/PlaybookView.tsx`
+
+Melhorar a apresentação visual das soluções:
+
+```text
+┌───────────────────────────────────────────────────────────────┐
+│  [DOR] Pressão pelo deadline 2027 de fim de suporte SAP ECC   │
+├───────────────────────────────────────────────────────────────┤
+│                                                               │
+│  💡 SOLUÇÃO: Conversão SAP S/4HANA Brownfield                 │
+│                                                               │
+│  Para a [Empresa], que está em SAP ECC e precisa migrar       │
+│  antes do deadline de 2027, a conversão brownfield permite    │
+│  preservar customizações críticas enquanto atualiza para      │
+│  S/4HANA. Baseado na evidência de "vagas SAP abertas",        │
+│  nossa equipe de outsourcing pode acelerar a migração.        │
+│                                                               │
+│  ✓ Preservação de investimentos anteriores                    │
+│  ✓ Menor impacto nas operações                                │
+│  ✓ Transição mais rápida                                      │
+│                                                               │
+│  [92% match] [Case similar: Bruning]                          │
+│                                                               │
+└───────────────────────────────────────────────────────────────┘
+```
+
+## Fluxo de Dados Atualizado
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                          FLUXO ATUAL                                   │
+└────────────────────────────────────────────────────────────────────────┘
+
+  Dores → Match Keywords → Solução com expected_result genérico
+
+┌────────────────────────────────────────────────────────────────────────┐
+│                          FLUXO NOVO                                    │
+└────────────────────────────────────────────────────────────────────────┘
+
+  Dores
+    ↓
+  + Evidências (seção 2)
+    ↓
+  + Status SAP do lead
+    ↓
+  + Setor e cargo
+    ↓
+  SCORING MULTICRITÉRIO
+    ↓
+  Top 7 soluções ranqueadas
+    ↓
+  IA GERA DESCRIÇÃO PERSONALIZADA para cada
+    ↓
+  Conecta com evidências e cases reais
+    ↓
+  SOLUÇÃO CONTEXTUALIZADA
 ```
 
 ## Detalhamento Técnico
 
-### Estrutura de Cada Case
+### Fase 1: Melhorar Scoring (sem IA adicional)
 
-**Exemplo - Case Bruning (detalhado):**
-```json
-{
-  "company_name": "Bruning",
-  "industry": "Industrial",
-  "industry_keywords": ["metalmecânico", "manufatura", "indústria"],
-  "company_size": "enterprise",
-  "title": "Bruning evolui sua operação para a última versão do SAP S/4HANA e se prepara para a reforma tributária",
-  "description": "Atualização para a última versão do SAP S/4HANA, migrando de um sistema próprio para uma solução ERP robusta, visando conformidade com a Reforma Tributária e busca contínua por eficiência. A Bruning, com mais de 1.001 colaboradores, é referência no setor metalmecânico brasileiro.",
-  "challenge": "Sustentar o crescimento acelerado, garantir conformidade com a Reforma Tributária e manter a eficiência operacional.",
-  "solution": "Atualização do SAP S/4HANA com a Meta, com foco em alinhamento cultural, equipes integradas e Gestão de Mudança Organizacional (GMO).",
-  "key_result": "Preparação para a Reforma Tributária e potencialização do uso da ferramenta para decisões mais seguras.",
-  "results": [
-    "Maior estabilidade operacional",
-    "Melhorias na integração entre módulos e processos",
-    "Mais eficiência na tomada de decisão",
-    "Base tecnológica preparada para exigências fiscais",
-    "Fortalecimento da estrutura interna"
-  ],
-  "sap_solutions": ["S/4HANA", "DRC"],
-  "sap_modules": ["FI", "CO", "MM", "SD"],
-  "project_type": "upgrade",
-  "case_url": "https://meta.com.br/cases/bruning-atualizacao",
-  "country": "Brasil",
-  "is_active": true
-}
+1. **Adicionar novos critérios ao scoring**:
+   - Peso maior para match de `related_pains`
+   - Considerar `use_cases` como critério secundário
+   - Boost para soluções que têm cases do mesmo setor
+
+2. **Priorização por urgência**:
+   - ECC + deadline 2027 → Migração S/4HANA tem prioridade máxima
+   - Reforma tributária mencionada → Adequação Tributária tem prioridade máxima
+   - Vagas SAP abertas → AMS ou Outsourcing tem boost
+
+3. **Limite de soluções**: Aumentar de 5 para 7
+
+### Fase 2: Geração de Descrições Personalizadas (com IA)
+
+1. **Batch de descrições**: Para as top 7 soluções, fazer UMA chamada à IA solicitando descrições personalizadas para todas
+
+2. **Prompt otimizado**:
+```text
+Para cada solução abaixo, gere uma descrição de 2-3 frases 
+explicando como ela resolve a dor específica deste cliente.
+
+CONTEXTO DO CLIENTE:
+[dados do lead]
+
+SOLUÇÕES A DESCREVER:
+1. Dor: X | Solução: Y
+2. Dor: A | Solução: B
+...
+
+Retorne um JSON com as descrições personalizadas.
 ```
 
-**Exemplo - Case em Preparação (Sicoob):**
-```json
-{
-  "company_name": "Sicoob",
-  "industry": "Financeiro",
-  "industry_keywords": ["cooperativa", "crédito", "banco", "financeiro"],
-  "company_size": "enterprise",
-  "title": "Sicoob reduz R$3 milhões em custos operacionais com apoio da Meta",
-  "description": "Projeto de otimização e redução de custos operacionais com o Sicoob, uma das maiores cooperativas de crédito do Brasil, resultando em economia significativa de R$3 milhões.",
-  "results": ["Redução de R$3 milhões em custos operacionais"],
-  "sap_solutions": ["S/4HANA"],
-  "project_type": "implementacao",
-  "case_url": "https://meta.com.br/cases/sicoob",
-  "country": "Brasil",
-  "is_active": false
-}
-```
+3. **Fallback**: Se a IA falhar, usar `expected_result` do banco
 
-## Execução
+### Fase 3: Conectar com Cases e Evidências
 
-A inserção será feita em **2 lotes**:
+1. Para cada solução, verificar se existe um case ranqueado que usou aquela solução
+2. Se sim, adicionar referência: "Case similar: Bruning (migração S/4HANA)"
+3. Conectar com evidência que confirmou a necessidade
 
-1. **Lote 1**: 7 cases detalhados (com `is_active: true`)
-2. **Lote 2**: 11 cases em preparação (com `is_active: false`)
+## Resultado Esperado
 
-Os cases em preparação ficam com `is_active: false` para não aparecerem nos playbooks até que tenham conteúdo completo. Quando o site da Meta IT atualizar o conteúdo, basta mudar para `is_active: true`.
+| Antes | Depois |
+|-------|--------|
+| Descrição genérica do banco | Descrição personalizada para o contexto |
+| Match por keywords simples | Scoring multicritério inteligente |
+| 5 soluções sem priorização clara | 7 soluções com urgência e relevância |
+| Sem conexão com evidências | Evidência que confirma mostrada |
+| Sem conexão com cases | Case similar referenciado |
 
-## Resultado Final
+## Arquivos a Modificar
 
-Após a execução, a tabela `meta_cases` terá:
-- **18 cases** cadastrados
-- **7 cases ativos** (aparecem nos playbooks)
-- **11 cases inativos** (prontos para ativação futura)
+1. `supabase/functions/generate-playbook/index.ts` - Motor de scoring e prompt
+2. `src/types/playbook.types.ts` - Novo tipo EnrichedMetaSolution
+3. `src/components/Playbook/PlaybookView.tsx` - Nova UI das soluções
+4. `src/store/playbookStore.ts` - Atualizar tipagem se necessário
 
-Os cases serão automaticamente utilizados pelo sistema de ranking para sugerir cases relevantes baseados em:
-- Similaridade de indústria
-- Módulos SAP em comum
-- Tipo de projeto correspondente
+## Estimativa de Esforço
+
+- Motor de scoring melhorado: 30 min
+- Geração de descrições via IA: 45 min
+- Atualização da UI: 30 min
+- Testes e ajustes: 15 min
+
+**Total: ~2 horas**
