@@ -1,273 +1,421 @@
 
-# Plano: Reestruturação da Seção "Como a Meta IT Pode Ajudar"
 
-## Problema Identificado
+# Plano: Motor de Soluções Verdadeiramente Personalizado
 
-Após análise detalhada do código, identifiquei que a seção "4. Como a Meta IT Pode Ajudar" possui várias deficiências:
+## Problema Atual
 
-1. **Mapeamento por keywords simples**: O algoritmo atual faz match por palavras-chave entre `related_pains` e a dor identificada, o que resulta em associações fracas ou irrelevantes
-2. **Score de match baixo**: O threshold mínimo de 0.3 permite soluções com baixa aderência
-3. **Falta de análise contextual profunda**: Não considera o cenário completo do cliente (setor + cargo + status SAP + evidências) de forma integrada
-4. **Descrição genérica**: A descrição da solução vem diretamente do banco (`expected_result`) sem personalização para o contexto
-5. **Limite de 5 soluções**: Mesmo com muitas dores identificadas, apenas 5 soluções são mostradas
+Após análise do código, identifiquei os problemas principais:
 
-## Solução Proposta
+1. **Dependência exclusiva do banco de dados**: O sistema APENAS mapeia soluções existentes na tabela `meta_solutions`
+2. **Filtro de cargo quebrado**: Target roles no banco (`CEO`, `Gerente de TI`) não correspondem às categorias do filtro (`C-level`, `Gerente`)
+3. **Sem capacidade de criar soluções novas**: Se nenhuma solução do banco faz match, a seção fica vazia
+4. **Descrições ainda genéricas**: O prompt de personalização não está gerando contexto suficientemente específico
+5. **Falta sinalização de origem**: Não indica se a solução é "existente" ou "recomendação nova"
 
-Criar um **motor de recomendação inteligente** que:
-- Analisa o contexto completo do cliente
-- Usa IA para gerar descrições personalizadas de como cada solução resolve a dor específica
-- Prioriza soluções com base em critérios mais sofisticados
+## Nova Arquitetura: Motor de Soluções Híbrido
 
-## Arquitetura da Solução
+O sistema terá dois modos de operação:
+
+1. **Modo 1 - Soluções Mapeadas**: Match com soluções existentes no banco (como hoje, mas melhorado)
+2. **Modo 2 - Soluções Geradas por IA**: Quando não há match suficiente, a IA cria soluções personalizadas baseadas nas dores
+
+---
+
+## Estrutura do Novo Motor
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     NOVO MOTOR DE SOLUÇÕES                              │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  INPUT:                                                                 │
-│  ├── Dores Prováveis (seção 3)                                          │
-│  ├── Evidências Encontradas (seção 2)                                   │
-│  ├── Contexto do Lead (cargo, empresa, setor)                           │
-│  ├── Status SAP (ECC, S/4HANA, etc)                                     │
-│  └── Cases Ranqueados (seção 5)                                         │
-│                                                                         │
-│  PROCESSAMENTO:                                                         │
-│  ├── 1. ANÁLISE CONTEXTUAL                                              │
-│  │   ├── Determinar prioridades baseadas em status SAP                  │
-│  │   ├── Identificar urgências (deadline 2027, reforma tributária)      │
-│  │   └── Correlacionar com evidências reais                             │
-│  │                                                                      │
-│  ├── 2. SCORING INTELIGENTE                                             │
-│  │   ├── Match direto dor-solução (0.4)                                 │
-│  │   ├── Contexto SAP (0.25)                                            │
-│  │   ├── Evidências confirmam necessidade (0.2)                         │
-│  │   ├── Setor compatível (0.1)                                         │
-│  │   └── Cargo alinhado (0.05)                                          │
-│  │                                                                      │
-│  └── 3. GERAÇÃO PERSONALIZADA VIA IA                                    │
-│      ├── Para cada solução top, gerar descrição personalizada           │
-│      ├── Explicar COMO a solução resolve AQUELA dor específica          │
-│      └── Conectar com evidências reais do cliente                       │
-│                                                                         │
-│  OUTPUT:                                                                │
-│  ├── 5-7 soluções ranqueadas                                            │
-│  ├── Descrição personalizada para o contexto                            │
-│  ├── Conexão explícita com dores e evidências                           │
-│  └── Score de match transparente                                        │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+INPUT:
+  - Dores prováveis
+  - Contexto do cliente
+  - Status SAP
+  - Evidências reais
+  - Cases ranqueados
+
+ETAPA 1: BUSCAR SOLUÇÕES EXISTENTES
+  - Para cada dor, buscar melhor match no banco
+  - Aplicar scoring multicritério
+  - Filtro de cargo corrigido
+
+ETAPA 2: IDENTIFICAR LACUNAS
+  - Dores sem solução mapeada (score < 0.35)
+  - Máximo de 3 lacunas identificadas
+
+ETAPA 3: GERAR SOLUÇÕES VIA IA
+  - Para lacunas, IA sugere solução personalizada
+  - Sinalizar como "NOVA RECOMENDACAO"
+  - Descrição 100% contextualizada
+
+ETAPA 4: COMBINAR E RANKEAR
+  - Mesclar soluções existentes + geradas
+  - Ordenar por urgência e score
+  - Top 7 soluções finais
+
+OUTPUT:
+  - Cada solução indica origem: "EXISTENTE" ou "NOVA"
+  - Descrição personalizada para TODAS
+  - Conexão com evidências e cases
 ```
+
+---
 
 ## Alterações Detalhadas
 
-### 1. Reestruturar o Motor de Soluções (Edge Function)
+### 1. Corrigir Filtro de Cargo
 
 **Arquivo**: `supabase/functions/generate-playbook/index.ts`
 
-Substituir a função `findRelevantSolutions` por uma versão mais inteligente:
+O problema é que `sol.target_roles` contém valores como `["CEO", "CFO", "Gerente de TI"]` mas o código tenta comparar com `["C-level", "Gerente"]`.
 
 ```typescript
-// Novos critérios de scoring
-const SOLUTION_SCORING = {
-  painMatch: {
-    exact: 0.40,      // Match exato de dor mapeada
-    partial: 0.25,    // Match parcial por keywords
-    semantic: 0.30    // Match semântico via IA
-  },
-  context: {
-    sapStatus: 0.25,  // ECC -> prioriza migração
-    urgency: 0.15,    // Deadline 2027, reforma tributária
-    evidence: 0.20    // Evidência confirma necessidade
-  },
-  alignment: {
-    industry: 0.10,   // Setor compatível
-    role: 0.05        // Cargo alinhado
-  }
+// NOVO: Mapeamento de target_roles específicos para categorias
+const ROLE_CATEGORY_MAP: Record<string, string[]> = {
+  'C-level': ['CEO', 'CFO', 'CIO', 'CTO', 'COO', 'Presidente', 'VP'],
+  'Diretor': ['Diretor', 'Director', 'Head', 'VP de'],
+  'Gerente': ['Gerente', 'Manager', 'Gestor', 'Coordenador', 'Controller'],
+  'Especialista': ['Especialista', 'Analista', 'Consultor', 'Arquiteto', 'Engenheiro'],
+  'Key User': ['Key User', 'Usuário', 'Operador', 'Assistente']
 };
+
+function targetRoleMatchesCategory(targetRole: string, category: string): boolean {
+  const patterns = ROLE_CATEGORY_MAP[category] || [];
+  const targetLower = targetRole.toLowerCase();
+  return patterns.some(pattern => targetLower.includes(pattern.toLowerCase()));
+}
+
+// Na função findRelevantSolutionsEnriched:
+const filteredSolutions = solutions.filter((sol) => {
+  if (!sol.target_roles || sol.target_roles.length === 0) return true;
+  return sol.target_roles.some(targetRole => 
+    roleNames.some(category => targetRoleMatchesCategory(targetRole, category))
+  );
+});
 ```
 
-### 2. Novo Prompt para Geração de Descrições Personalizadas
+### 2. Novo Prompt Otimizado para Geração de Soluções
 
-Em vez de usar apenas `expected_result`, enviar um prompt à IA que:
-- Recebe o contexto completo do cliente
-- Explica como a solução resolve a dor específica
-- Conecta com evidências reais
+Usando as melhores práticas de engenharia de prompt:
 
 ```typescript
-const solutionPrompt = `
-Você é um consultor SAP sênior da Meta IT. 
-Explique em 2-3 frases como esta solução ajuda este cliente específico.
+const SOLUTION_GENERATION_PROMPT = `
+<role>
+Você é um arquiteto de soluções SAP sênior da Meta IT com 15+ anos de experiência 
+em projetos de transformação digital. Sua especialidade é criar propostas de valor 
+personalizadas que conectam dores de negócio a soluções tecnológicas concretas.
+</role>
 
-CLIENTE:
-- Empresa: ${leadData.company}
-- Setor: ${leadData.industry}
-- Status SAP: ${leadData.sapStatus}
-- Cargo do Lead: ${leadData.role}
+<context>
+CLIENTE EM ANÁLISE:
+- Empresa: {{company}}
+- Setor: {{industry}}
+- Porte: {{companySize}}
+- Status SAP Atual: {{sapStatus}}
+- Cargo do Lead: {{role}} (Perfil: {{roleProfile}})
 
-DOR IDENTIFICADA:
-${pain}
+CENÁRIO IDENTIFICADO:
+{{scenarioAnalysis}}
 
-EVIDÊNCIA QUE CONFIRMA:
-${evidenceText}
+EVIDÊNCIAS REAIS ENCONTRADAS:
+{{evidencesList}}
 
-SOLUÇÃO META IT:
-${solution.name}: ${solution.description}
+DORES SEM SOLUÇÃO MAPEADA:
+{{unmappedPains}}
 
-INSTRUÇÕES:
-- Seja específico para o contexto deste cliente
-- Mencione o benefício principal
-- Conecte com a evidência se possível
-- Linguagem ${roleConfig.language}
+SOLUÇÕES JÁ MAPEADAS (evitar duplicação):
+{{mappedSolutions}}
+
+CASES DE SUCESSO RELEVANTES:
+{{relevantCases}}
+</context>
+
+<task>
+Para cada dor sem solução mapeada, crie UMA solução personalizada seguindo estas regras:
+</task>
+
+<rules>
+1. ESPECIFICIDADE OBRIGATÓRIA:
+   - Mencione o nome da empresa
+   - Conecte com evidência real quando disponível
+   - Referencie case similar se existir
+   - Use números e prazos realistas
+
+2. ESTRUTURA DA SOLUÇÃO:
+   - Nome: Título claro e profissional (sem genéricos)
+   - Descrição: 2-3 frases explicando COMO resolve AQUELA dor
+   - Benefícios: 3 benefícios específicos para o contexto
+   - Tipo: "diagnostico" | "projeto" | "servico_continuo"
+   - Prazo estimado: Realista para o escopo
+
+3. LINGUAGEM:
+   - Adaptar para {{languageStyle}}
+   - Focar em: {{focusAreas}}
+   - Evitar: {{avoidTopics}}
+
+4. REALISMO:
+   - Só sugerir o que a Meta IT realmente pode entregar
+   - Considerar capacidades: SAP S/4HANA, AMS, Outsourcing, BTP, 
+     Reforma Tributária, Rollouts, Consultoria
+</rules>
+
+<output_format>
+Retorne um JSON array com objetos:
+{
+  "pain": "dor original",
+  "solution": "nome da solução proposta",
+  "description": "descrição personalizada",
+  "benefits": ["benefício 1", "benefício 2", "benefício 3"],
+  "type": "diagnostico|projeto|servico_continuo",
+  "estimatedTimeline": "prazo estimado",
+  "connectionToEvidence": "como conecta com evidência (ou null)",
+  "connectionToCase": "case similar (ou null)",
+  "isNew": true
+}
+</output_format>
+
+<examples>
+EXEMPLO RUIM (genérico):
+{
+  "solution": "Consultoria SAP",
+  "description": "Oferecemos consultoria para melhorar seus processos SAP."
+}
+
+EXEMPLO BOM (personalizado):
+{
+  "solution": "Diagnóstico de Prontidão para Migração S/4HANA - {{company}}",
+  "description": "Para a {{company}}, que está em SAP ECC e enfrenta o deadline de 2027, 
+  propomos um diagnóstico de 3 semanas para mapear customizações críticas, integrações 
+  existentes e definir o roadmap ideal de migração. Similar ao que fizemos na Bruning, 
+  onde identificamos 40% de código obsoleto que pôde ser descartado.",
+  "benefits": [
+    "Clareza sobre investimento necessário em 3 semanas",
+    "Identificação de quick wins e riscos antecipados",
+    "Roadmap priorizado alinhado ao deadline 2027"
+  ],
+  "type": "diagnostico",
+  "estimatedTimeline": "3 semanas",
+  "connectionToEvidence": "Baseado na evidência de vagas SAP abertas",
+  "connectionToCase": "Similar ao diagnóstico da Bruning",
+  "isNew": true
+}
+</examples>
 `;
 ```
 
-### 3. Novo Tipo de Dados para Soluções Enriquecidas
+### 3. Função de Geração de Soluções Novas
+
+```typescript
+async function generateNewSolutions(
+  unmappedPains: { pain: string; reason: string; confidence: string }[],
+  mappedSolutions: EnrichedSolutionMatch[],
+  context: {
+    company: string;
+    industry: string;
+    role: string;
+    sapStatus: string;
+    companySize: string;
+  },
+  evidences: Evidence[],
+  cases: RankedCase[],
+  roleConfig: RoleConfig
+): Promise<GeneratedSolution[]> {
+  if (unmappedPains.length === 0) return [];
+  
+  // Limitar a 3 soluções novas para não sobrecarregar
+  const painsToSolve = unmappedPains.slice(0, 3);
+  
+  // Construir prompt com contexto rico
+  const scenarioAnalysis = buildScenarioAnalysis(context, evidences);
+  const evidencesList = evidences.map(e => `- ${e.title}: ${e.indication}`).join('\n');
+  const mappedSolutionsList = mappedSolutions.map(s => s.solution.name).join(', ');
+  const casesList = cases.map(c => `- ${c.case.company_name}: ${c.case.title}`).join('\n');
+  
+  const prompt = SOLUTION_GENERATION_PROMPT
+    .replace(/{{company}}/g, context.company)
+    .replace(/{{industry}}/g, context.industry)
+    .replace(/{{companySize}}/g, context.companySize)
+    .replace(/{{sapStatus}}/g, context.sapStatus)
+    .replace(/{{role}}/g, context.role)
+    .replace('{{roleProfile}}', getRoleProfile(roleConfig))
+    .replace('{{scenarioAnalysis}}', scenarioAnalysis)
+    .replace('{{evidencesList}}', evidencesList || 'Nenhuma evidência específica')
+    .replace('{{unmappedPains}}', painsToSolve.map(p => `- ${p.pain} (${p.confidence})`).join('\n'))
+    .replace('{{mappedSolutions}}', mappedSolutionsList || 'Nenhuma')
+    .replace('{{relevantCases}}', casesList || 'Nenhum case específico')
+    .replace('{{languageStyle}}', roleConfig.language)
+    .replace('{{focusAreas}}', roleConfig.priorityTopics.join(', '))
+    .replace('{{avoidTopics}}', roleConfig.excludeTopics.join(', '));
+
+  // Chamar IA com tool calling para estrutura garantida
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-3-flash-preview',
+      messages: [
+        { role: 'system', content: 'Você é um arquiteto de soluções SAP. Responda APENAS com JSON válido.' },
+        { role: 'user', content: prompt }
+      ],
+      tools: [{
+        type: 'function',
+        function: {
+          name: 'generate_custom_solutions',
+          description: 'Gera soluções personalizadas para dores não mapeadas',
+          parameters: {
+            type: 'object',
+            properties: {
+              solutions: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    pain: { type: 'string' },
+                    solution: { type: 'string' },
+                    description: { type: 'string' },
+                    benefits: { type: 'array', items: { type: 'string' } },
+                    type: { type: 'string', enum: ['diagnostico', 'projeto', 'servico_continuo'] },
+                    estimatedTimeline: { type: 'string' },
+                    connectionToEvidence: { type: 'string' },
+                    connectionToCase: { type: 'string' }
+                  },
+                  required: ['pain', 'solution', 'description', 'benefits', 'type']
+                }
+              }
+            },
+            required: ['solutions']
+          }
+        }
+      }],
+      tool_choice: { type: 'function', function: { name: 'generate_custom_solutions' } }
+    }),
+  });
+  
+  // Processar resposta e retornar soluções geradas
+  // ... parsing e validação
+}
+```
+
+### 4. Novo Tipo para Indicar Origem da Solução
 
 **Arquivo**: `src/types/playbook.types.ts`
 
 ```typescript
-export interface EnrichedMetaSolution {
-  pain: string;                    // Dor que resolve
-  painConfidence: 'alta' | 'media' | 'baixa';
-  solution: string;                // Nome da solução
-  personalizedDescription: string; // Descrição gerada por IA
-  genericDescription: string;      // Descrição padrão (fallback)
-  benefits: string[];              // Top 3 benefícios
-  matchScore: number;              // Score de compatibilidade (0-1)
-  matchReasons: string[];          // Motivos do match
-  relatedEvidence?: string;        // Evidência que confirma
-  relatedCase?: string;            // Case similar
+export interface MetaSolution {
+  pain: string;
+  painConfidence?: 'alta' | 'media' | 'baixa';
+  solution: string;
+  description: string;
+  personalizedDescription?: string;
+  benefits?: string[];
+  matchReason?: string;
+  matchReasons?: string[];
+  matchScore?: number;
+  relatedEvidence?: string;
+  relatedCase?: string;
   urgencyLevel?: 'critical' | 'high' | 'medium' | 'low';
+  
+  // NOVO: Indicador de origem
+  solutionOrigin: 'existing' | 'generated';
+  solutionType?: 'diagnostico' | 'projeto' | 'servico_continuo';
+  estimatedTimeline?: string;
 }
 ```
 
-### 4. Atualizar Interface do Playbook
+### 5. Atualizar UI para Mostrar Origem
 
 **Arquivo**: `src/components/Playbook/PlaybookView.tsx`
 
-Melhorar a apresentação visual das soluções:
+Adicionar badge visual para indicar se a solução é existente ou nova recomendação:
 
 ```text
-┌───────────────────────────────────────────────────────────────┐
-│  [DOR] Pressão pelo deadline 2027 de fim de suporte SAP ECC   │
-├───────────────────────────────────────────────────────────────┤
-│                                                               │
-│  💡 SOLUÇÃO: Conversão SAP S/4HANA Brownfield                 │
-│                                                               │
-│  Para a [Empresa], que está em SAP ECC e precisa migrar       │
-│  antes do deadline de 2027, a conversão brownfield permite    │
-│  preservar customizações críticas enquanto atualiza para      │
-│  S/4HANA. Baseado na evidência de "vagas SAP abertas",        │
-│  nossa equipe de outsourcing pode acelerar a migração.        │
-│                                                               │
-│  ✓ Preservação de investimentos anteriores                    │
-│  ✓ Menor impacto nas operações                                │
-│  ✓ Transição mais rápida                                      │
-│                                                               │
-│  [92% match] [Case similar: Bruning]                          │
-│                                                               │
-└───────────────────────────────────────────────────────────────┘
+Soluções existentes:
+  [SOLUÇÃO VALIDADA] - Badge verde
+  - Indica que é uma solução que já entregamos antes
+  
+Soluções novas:
+  [NOVA RECOMENDAÇÃO] - Badge amarelo/dourado
+  - Indica que é uma sugestão personalizada da IA
+  - Inclui ícone de "lightbulb" ou "sparkle"
 ```
 
-## Fluxo de Dados Atualizado
+---
+
+## Fluxo Completo Atualizado
 
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                          FLUXO ATUAL                                   │
-└────────────────────────────────────────────────────────────────────────┘
+ENTRADA: Lead com dores identificadas
 
-  Dores → Match Keywords → Solução com expected_result genérico
+  1. BUSCAR SOLUÇÕES EXISTENTES
+     ├── Aplicar scoring multicritério
+     ├── Filtrar por cargo (CORRIGIDO)
+     └── Threshold: 0.35
 
-┌────────────────────────────────────────────────────────────────────────┐
-│                          FLUXO NOVO                                    │
-└────────────────────────────────────────────────────────────────────────┘
+  2. IDENTIFICAR LACUNAS
+     ├── Dores com score < 0.35
+     └── Máximo 3 lacunas
 
-  Dores
-    ↓
-  + Evidências (seção 2)
-    ↓
-  + Status SAP do lead
-    ↓
-  + Setor e cargo
-    ↓
-  SCORING MULTICRITÉRIO
-    ↓
-  Top 7 soluções ranqueadas
-    ↓
-  IA GERA DESCRIÇÃO PERSONALIZADA para cada
-    ↓
-  Conecta com evidências e cases reais
-    ↓
-  SOLUÇÃO CONTEXTUALIZADA
+  3. SE HOUVER LACUNAS:
+     ├── Gerar prompt personalizado
+     ├── Chamar IA com contexto rico
+     └── Criar soluções novas
+
+  4. COMBINAR RESULTADOS
+     ├── Soluções existentes (origin: 'existing')
+     ├── Soluções geradas (origin: 'generated')
+     └── Ordenar por urgência + score
+
+  5. PERSONALIZAR DESCRIÇÕES
+     ├── Para TODAS as soluções (existentes + novas)
+     └── Batch call para eficiência
+
+  6. OUTPUT FINAL
+     ├── 5-7 soluções ranqueadas
+     ├── Cada uma com origem identificada
+     └── Descrição 100% personalizada
 ```
 
-## Detalhamento Técnico
-
-### Fase 1: Melhorar Scoring (sem IA adicional)
-
-1. **Adicionar novos critérios ao scoring**:
-   - Peso maior para match de `related_pains`
-   - Considerar `use_cases` como critério secundário
-   - Boost para soluções que têm cases do mesmo setor
-
-2. **Priorização por urgência**:
-   - ECC + deadline 2027 → Migração S/4HANA tem prioridade máxima
-   - Reforma tributária mencionada → Adequação Tributária tem prioridade máxima
-   - Vagas SAP abertas → AMS ou Outsourcing tem boost
-
-3. **Limite de soluções**: Aumentar de 5 para 7
-
-### Fase 2: Geração de Descrições Personalizadas (com IA)
-
-1. **Batch de descrições**: Para as top 7 soluções, fazer UMA chamada à IA solicitando descrições personalizadas para todas
-
-2. **Prompt otimizado**:
-```text
-Para cada solução abaixo, gere uma descrição de 2-3 frases 
-explicando como ela resolve a dor específica deste cliente.
-
-CONTEXTO DO CLIENTE:
-[dados do lead]
-
-SOLUÇÕES A DESCREVER:
-1. Dor: X | Solução: Y
-2. Dor: A | Solução: B
-...
-
-Retorne um JSON com as descrições personalizadas.
-```
-
-3. **Fallback**: Se a IA falhar, usar `expected_result` do banco
-
-### Fase 3: Conectar com Cases e Evidências
-
-1. Para cada solução, verificar se existe um case ranqueado que usou aquela solução
-2. Se sim, adicionar referência: "Case similar: Bruning (migração S/4HANA)"
-3. Conectar com evidência que confirmou a necessidade
-
-## Resultado Esperado
-
-| Antes | Depois |
-|-------|--------|
-| Descrição genérica do banco | Descrição personalizada para o contexto |
-| Match por keywords simples | Scoring multicritério inteligente |
-| 5 soluções sem priorização clara | 7 soluções com urgência e relevância |
-| Sem conexão com evidências | Evidência que confirma mostrada |
-| Sem conexão com cases | Case similar referenciado |
+---
 
 ## Arquivos a Modificar
 
-1. `supabase/functions/generate-playbook/index.ts` - Motor de scoring e prompt
-2. `src/types/playbook.types.ts` - Novo tipo EnrichedMetaSolution
-3. `src/components/Playbook/PlaybookView.tsx` - Nova UI das soluções
-4. `src/store/playbookStore.ts` - Atualizar tipagem se necessário
+1. **`supabase/functions/generate-playbook/index.ts`**
+   - Corrigir filtro de cargo com `ROLE_CATEGORY_MAP`
+   - Adicionar função `generateNewSolutions()`
+   - Integrar soluções existentes + geradas
+   - Novo prompt otimizado
+
+2. **`src/types/playbook.types.ts`**
+   - Adicionar campo `solutionOrigin`
+   - Adicionar campo `solutionType`
+   - Adicionar campo `estimatedTimeline`
+
+3. **`src/components/Playbook/PlaybookView.tsx`**
+   - Badge visual para origem
+   - Exibir timeline quando disponível
+   - Melhorar layout para soluções novas
+
+---
+
+## Resultado Esperado
+
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Dor com match no banco | Descrição genérica | Descrição personalizada + "SOLUÇÃO VALIDADA" |
+| Dor sem match no banco | Seção vazia | Solução gerada por IA + "NOVA RECOMENDAÇÃO" |
+| Filtro de cargo | Não funciona | Funciona corretamente |
+| Total de soluções | 0-5 | 5-7 (sempre) |
+| Origem clara | Não | Sim, com badge visual |
+
+---
 
 ## Estimativa de Esforço
 
-- Motor de scoring melhorado: 30 min
-- Geração de descrições via IA: 45 min
+- Correção do filtro de cargo: 15 min
+- Função de geração de soluções: 45 min
+- Prompt otimizado: 30 min
 - Atualização da UI: 30 min
-- Testes e ajustes: 15 min
+- Testes e ajustes: 20 min
 
-**Total: ~2 horas**
+**Total: ~2.5 horas**
+
