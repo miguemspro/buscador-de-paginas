@@ -11,25 +11,33 @@ const corsHeaders = {
 // AUTHENTICATION & VALIDATION
 // ============================================
 
-// Zod schema for input validation
+// Helper for nullable string fields - accepts null and converts to undefined
+const nullableString = (max: number) => 
+  z.string().max(max).nullable().optional().transform(v => v ?? undefined);
+
+// Helper for nullable string with min length
+const nullableStringMin = (min: number, max: number) => 
+  z.string().min(min).max(max).nullable().optional().transform(v => v ?? undefined);
+
+// Zod schema for input validation - accepts null values from AI extraction
 const LeadDataSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
-  company: z.string().min(1).max(200).optional(),
-  role: z.string().max(200).optional(),
-  email: z.string().max(320).optional(),
-  phone: z.string().max(50).optional(),
-  linkedinUrl: z.string().max(500).optional(),
-  industry: z.string().max(100).optional(),
-  sapStatus: z.string().max(50).optional(),
-  companySize: z.string().max(50).optional(),
-  projectType: z.string().max(100).optional(),
-  sapModules: z.array(z.string().max(50)).max(20).optional(),
-  challenges: z.array(z.string().max(200)).max(10).optional(),
-  publicSignals: z.string().max(10000).optional(),
-  notes: z.string().max(5000).optional(),
-  leadSource: z.string().max(200).optional(),
-  leadOwner: z.string().max(200).optional(),
-  priority: z.string().max(50).optional(),
+  name: nullableStringMin(1, 200),
+  company: nullableStringMin(1, 200),
+  role: nullableString(200),
+  email: nullableString(320),
+  phone: nullableString(50),
+  linkedinUrl: nullableString(500),
+  industry: nullableString(100),
+  sapStatus: nullableString(50),
+  companySize: nullableString(50),
+  projectType: nullableString(100),
+  sapModules: z.array(z.string().max(50)).max(20).nullable().optional().transform(v => v ?? undefined),
+  challenges: z.array(z.string().max(200)).max(10).nullable().optional().transform(v => v ?? undefined),
+  publicSignals: nullableString(10000),
+  notes: nullableString(5000),
+  leadSource: nullableString(200),
+  leadOwner: nullableString(200),
+  priority: nullableString(50),
 });
 
 type LeadDataInput = z.infer<typeof LeadDataSchema>;

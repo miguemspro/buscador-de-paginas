@@ -131,7 +131,7 @@ Retorne um JSON com esta estrutura exata:
 
 IMPORTANTE:
 - Extraia EXATAMENTE o que está escrito, não invente dados
-- Se um campo não estiver visível, use null
+- Se um campo não estiver visível, OMITA o campo do JSON (não inclua campos vazios)
 - Para sapStatus, procure por campos como "Ritmo atual", "SAP Status", etc.
 - Infira industry e companySize baseado no nome da empresa se necessário
 - Retorne APENAS o JSON, sem markdown ou explicação`
