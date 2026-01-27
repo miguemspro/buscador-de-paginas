@@ -1,117 +1,155 @@
 
-# Plano: Corrigir Filtro de Compatibilidade SAP com Valores de Enum
+# Plano: Correção Definitiva do Filtro de Migração S/4HANA
 
-## Diagnóstico do Problema
+## Diagnóstico do Problema Real
 
-### Causa Raiz Identificada
+O log mostra o que está acontecendo:
 
-O console log mostra que o lead está sendo enviado com:
-```json
-"sapStatus": "sap_services"
+```
+[SAP Status] Valor: "sap_services" | É S/4: false | É ECC: false
 ```
 
-Mas o usuário reporta que o lead **já está em S/4HANA**. Existem **2 problemas**:
+**Causa raiz identificada:** O campo `sapStatus` no Salesforce está como "SAP Services", mas a Klabin **JÁ ESTÁ EM S/4HANA**. O sistema está confiando cegamente no dado do Salesforce, que está desatualizado ou usando uma nomenclatura incorreta.
 
-### Problema 1: Detecção de S/4HANA usa string matching incorreto
+### Fluxo do problema:
 
-A função `isSolutionCompatibleWithSapStatus` (linha 239) verifica:
-```typescript
-const isS4 = sapLower.includes('s/4') || sapLower.includes('s4hana');
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         FLUXO ATUAL (COM BUG)                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   1. OCR lê "SAP Services" do Salesforce                                   │
+│      ↓                                                                      │
+│   2. sapStatus = "sap_services"                                            │
+│      ↓                                                                      │
+│   3. isClientOnS4HANA("sap_services") = FALSE ❌                           │
+│      ↓                                                                      │
+│   4. Web search encontra notícias sobre "Klabin + ECC + deadline 2027"     │
+│      ↓                                                                      │
+│   5. PAIN_EVIDENCE_MATRIX dispara "Urgência de migração..."                │
+│      ↓                                                                      │
+│   6. Filtro não bloqueia porque clientIsOnS4 = false                       │
+│      ↓                                                                      │
+│   7. Solução "Conversão SAP S/4HANA Brownfield" é sugerida ❌              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Isso falha porque:
-- Valor do enum: `'s4hana'` (funciona ✓)
-- Valor do enum: `'sap_services'` (não detecta ✗)
-- Valor do enum: `'sap_ecc'` (não detecta ✗)
+## Solução: Detecção Inteligente via Evidências
 
-**A lógica deveria verificar os valores exatos do enum, não fazer matching parcial de strings.**
+A solução é **detectar o status SAP REAL baseado nas evidências encontradas**, não apenas confiar no dado do Salesforce. Se as evidências indicarem que a empresa já implementou S/4HANA, devemos tratar como cliente S/4.
 
-### Problema 2: Dores de migração são geradas mesmo para S/4HANA
+### Modificações no arquivo `supabase/functions/generate-playbook/index.ts`:
 
-A função `derivePainsFromContext` (linha 300-305) tem o `PAIN_EVIDENCE_MATRIX` que gera dores de "Urgência de migração antes do fim de suporte SAP ECC (2027)" quando evidências mencionam "ECC" ou "deadline 2027" - **mesmo que o lead já esteja em S/4HANA**.
+### 1. Nova função: Detectar Status SAP pelas Evidências
 
-### Problema 3: O valor `'sap_services'` é ambíguo
-
-O valor `'sap_services'` não indica claramente se o cliente está em S/4HANA ou não. Isso pode significar "SAP Services" (um produto diferente) ou ser usado quando a versão é desconhecida.
-
----
-
-## Solução Proposta
-
-### Alterações no arquivo `supabase/functions/generate-playbook/index.ts`:
-
-### 1. Criar constantes para os valores de enum SAP
-
-```typescript
-// Valores possíveis do enum sapStatus do frontend
-const SAP_STATUS_ENUM = {
-  S4HANA: 's4hana',        // Cliente já em S/4HANA - NÃO sugerir migração
-  SAP_ECC: 'sap_ecc',      // Cliente em ECC - SUGERIR migração
-  SAP_SERVICES: 'sap_services', // SAP Services - verificar se contém s/4
-  BUSINESS_ONE: 'business_one', // Business One - não é ERP SAP tradicional
-  NO_SAP: 'no_sap',        // Sem SAP
-  UNKNOWN: 'unknown'       // Desconhecido
-};
-```
-
-### 2. Corrigir a função `isSolutionCompatibleWithSapStatus`
+Adicionar após as funções de detecção existentes (~linha 280):
 
 ```typescript
-function isClientOnS4HANA(sapStatus: string | undefined): boolean {
-  if (!sapStatus) return false;
-  
-  const sapLower = sapStatus.toLowerCase().trim();
-  
-  // 1. Verificar valor exato do enum
-  if (sapLower === 's4hana') return true;
-  
-  // 2. Verificar se a string contém indicadores de S/4
-  // (para casos de texto livre ou valores legados)
-  if (sapLower.includes('s/4') || 
-      sapLower.includes('s4 hana') ||
-      sapLower.includes('s/4hana') ||
-      (sapLower.includes('s4') && sapLower.includes('hana'))) {
-    return true;
+// Palavras-chave que indicam S/4HANA JÁ IMPLEMENTADO
+const S4_IMPLEMENTED_KEYWORDS = [
+  'implementou s/4',
+  'implementou s4',
+  'migrou para s/4',
+  'migrou para s4',
+  'implantou s/4',
+  'implantou s4',
+  'go-live s/4',
+  'go-live s4',
+  'já está em s/4',
+  'já está em s4',
+  'opera em s/4',
+  'opera em s4',
+  'utiliza s/4',
+  'utiliza s4',
+  'adotou s/4',
+  'adotou s4',
+  'concluiu migração',
+  'concluída migração',
+  'finalizada migração para s/4',
+  's/4hana em produção',
+  's4hana em produção',
+  'projeto s/4hana concluído',
+  'projeto s4hana concluído'
+];
+
+// Palavras-chave que indicam cliente ainda em ECC (precisa migrar)
+const ECC_KEYWORDS = [
+  'ainda em ecc',
+  'utiliza ecc',
+  'opera em ecc',
+  'precisa migrar',
+  'planejando migração',
+  'roadmap de migração',
+  'projeto de migração em andamento',
+  'avaliando migração'
+];
+
+function detectSapStatusFromEvidences(
+  evidences: { title: string; indication: string }[]
+): 's4hana' | 'ecc' | null {
+  for (const evidence of evidences) {
+    const text = `${evidence.title} ${evidence.indication}`.toLowerCase();
+    
+    // Verificar se indica S/4HANA já implementado
+    for (const keyword of S4_IMPLEMENTED_KEYWORDS) {
+      if (text.includes(keyword)) {
+        console.log(`[SAP Detection] Evidência indica S/4HANA implementado: "${evidence.title}"`);
+        return 's4hana';
+      }
+    }
+    
+    // Verificar se indica ainda em ECC
+    for (const keyword of ECC_KEYWORDS) {
+      if (text.includes(keyword)) {
+        console.log(`[SAP Detection] Evidência indica ainda em ECC: "${evidence.title}"`);
+        return 'ecc';
+      }
+    }
   }
   
-  return false;
+  return null; // Não foi possível determinar
 }
 
-function isClientOnECC(sapStatus: string | undefined): boolean {
-  if (!sapStatus) return false;
+// Função combinada que usa ambas as fontes
+function getEffectiveSapStatus(
+  sapStatusFromForm: string | undefined,
+  evidences: { title: string; indication: string }[]
+): { isS4: boolean; isECC: boolean; source: 'form' | 'evidence' | 'unknown' } {
   
-  const sapLower = sapStatus.toLowerCase().trim();
+  // 1. Tentar detectar pelo formulário primeiro
+  const formIsS4 = isClientOnS4HANA(sapStatusFromForm);
+  const formIsECC = isClientOnECC(sapStatusFromForm);
   
-  // 1. Verificar valor exato do enum
-  if (sapLower === 'sap_ecc') return true;
-  
-  // 2. Verificar se a string contém indicadores de ECC
-  if (sapLower.includes('ecc') || sapLower.includes('r/3')) {
-    return true;
+  // Se o formulário indica claramente S/4 ou ECC, usar isso
+  if (formIsS4) {
+    return { isS4: true, isECC: false, source: 'form' };
+  }
+  if (formIsECC) {
+    return { isS4: false, isECC: true, source: 'form' };
   }
   
-  return false;
-}
-
-function isSolutionCompatibleWithSapStatus(
-  solutionName: string, 
-  sapStatus: string | undefined
-): boolean {
-  if (!sapStatus) return true;
+  // 2. Se formulário é ambíguo (sap_services, unknown, etc), verificar evidências
+  const evidenceStatus = detectSapStatusFromEvidences(evidences);
   
-  // Se cliente está em S/4HANA, excluir soluções de migração PARA S/4
-  if (isClientOnS4HANA(sapStatus) && isMigrationToS4Solution(solutionName)) {
-    console.log(`[SAP Filter] Cliente em S/4HANA - excluindo migração: "${solutionName}"`);
-    return false;
+  if (evidenceStatus === 's4hana') {
+    console.log(`[SAP Status Override] Formulário diz "${sapStatusFromForm}", mas evidências indicam S/4HANA`);
+    return { isS4: true, isECC: false, source: 'evidence' };
   }
   
-  return true;
+  if (evidenceStatus === 'ecc') {
+    console.log(`[SAP Status Override] Formulário diz "${sapStatusFromForm}", mas evidências indicam ECC`);
+    return { isS4: false, isECC: true, source: 'evidence' };
+  }
+  
+  // 3. Não foi possível determinar - assumir status ambíguo (não filtrar agressivamente)
+  return { isS4: false, isECC: false, source: 'unknown' };
 }
 ```
 
-### 3. Corrigir `derivePainsFromContext` para filtrar dores de migração
+### 2. Modificar `derivePainsFromContext` para usar detecção inteligente
 
-Na função `derivePainsFromContext`, adicionar verificação do status SAP antes de adicionar dores relacionadas a migração:
+Alterar a função (~linha 378) para usar a nova lógica:
 
 ```typescript
 function derivePainsFromContext(
@@ -123,128 +161,69 @@ function derivePainsFromContext(
   const pains: { pain: string; reason: string; confidence: 'alta' | 'media' | 'baixa' }[] = [];
   const addedPains = new Set<string>();
   
-  // NOVO: Verificar status SAP para filtrar dores irrelevantes
-  const clientIsOnS4 = isClientOnS4HANA(sapStatus);
+  // NOVO: Usar detecção inteligente que combina formulário + evidências
+  const effectiveStatus = getEffectiveSapStatus(sapStatus, evidences);
+  const clientIsOnS4 = effectiveStatus.isS4;
+  const clientIsOnECC = effectiveStatus.isECC;
   
-  // Dores que NÃO devem aparecer se o cliente já está em S/4HANA
-  const MIGRATION_PAIN_PATTERNS = [
-    'migração',
-    'deadline 2027',
-    'fim de suporte',
-    'suporte ecc',
-    'upgrade para s/4',
-    'conversão para s/4',
-    'planejamento de roadmap de migração'
-  ];
+  console.log(`[SAP Status] Formulário: "${sapStatus}" | Efetivo: É S/4: ${clientIsOnS4} | É ECC: ${clientIsOnECC} | Fonte: ${effectiveStatus.source}`);
 
-  // 1. Derivar dores das evidências encontradas
-  for (const evidence of evidences) {
-    const combinedText = `${evidence.title} ${evidence.indication}`.toLowerCase();
-    
-    for (const matrix of PAIN_EVIDENCE_MATRIX) {
-      const patterns = matrix.evidenceType.split('|');
-      if (patterns.some(p => combinedText.includes(p.toLowerCase()))) {
-        for (const pain of matrix.typicalPains) {
-          if (!addedPains.has(pain)) {
-            // NOVO: Filtrar dores de migração se cliente já está em S/4
-            if (clientIsOnS4) {
-              const painLower = pain.toLowerCase();
-              const isMigrationPain = MIGRATION_PAIN_PATTERNS.some(p => painLower.includes(p));
-              if (isMigrationPain) {
-                console.log(`[Pain Filter] Dor de migração excluída para cliente S/4: "${pain}"`);
-                continue; // Pular esta dor
-              }
-            }
-            
-            // Filtrar por cargo
-            const shouldExclude = roleConfig.excludeTopics.some(topic => 
-              pain.toLowerCase().includes(topic.toLowerCase())
-            );
-            if (!shouldExclude) {
-              addedPains.add(pain);
-              pains.push({
-                pain,
-                reason: `Baseado em: "${evidence.title}"`,
-                confidence: 'alta'
-              });
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // 2. Derivar dores do status SAP
-  if (sapStatus) {
-    // CORRIGIDO: Usar funções de detecção de enum
-    if (isClientOnECC(sapStatus)) {
-      if (!addedPains.has('deadline_2027')) {
-        addedPains.add('deadline_2027');
-        pains.push({
-          pain: 'Pressão pelo deadline 2027 de fim de suporte SAP ECC',
-          reason: `Status SAP atual: ${sapStatus}`,
-          confidence: 'alta'
-        });
-      }
-    }
-    
-    // Para clientes em S/4, sugerir otimização
-    if (clientIsOnS4) {
-      if (!addedPains.has('pos_golive')) {
-        addedPains.add('pos_golive');
-        pains.push({
-          pain: 'Otimização e estabilização do ambiente S/4HANA',
-          reason: `Status SAP atual: ${sapStatus}`,
-          confidence: 'media'
-        });
-      }
-    }
-  }
-  
   // ... resto da função continua igual
-}
 ```
 
-### 4. Adicionar logs de debug para visibilidade
+### 3. Atualizar `findRelevantSolutionsEnriched` para usar mesma lógica
 
-No início do processamento, logar o status SAP para facilitar debug:
+A função de soluções também precisa usar a detecção inteligente:
 
 ```typescript
-// No handler principal, após extrair leadData:
-console.log(`[SAP Status] Valor recebido: "${leadData.sapStatus}" | É S/4: ${isClientOnS4HANA(leadData.sapStatus)} | É ECC: ${isClientOnECC(leadData.sapStatus)}`);
+// No início de findRelevantSolutionsEnriched, após carregar evidências:
+const effectiveStatus = getEffectiveSapStatus(companyContext.sapStatus, evidences);
+const isS4 = effectiveStatus.isS4;
+const isECC = effectiveStatus.isECC;
+
+// Usar isS4 e isECC no lugar de isClientOnS4HANA(sapStatus)
 ```
 
----
+### 4. Adicionar logs detalhados para debug
 
-## Resumo das Correções
+```typescript
+console.log(`[SAP Detection] Analisando ${evidences.length} evidências para detectar status SAP real`);
+```
 
-| Ponto de Correção | Antes | Depois |
-|-------------------|-------|--------|
-| Detecção S/4HANA | `includes('s/4')` | Verifica enum `'s4hana'` + patterns |
-| Detecção ECC | `includes('ecc')` | Verifica enum `'sap_ecc'` + patterns |
-| Dores de migração | Geradas sempre | Filtradas se cliente em S/4 |
-| Logs de debug | Ausentes | Adicionados para visibilidade |
-
-## Casos de Teste
-
-| sapStatus | isS4 | isECC | Sugere Migração? |
-|-----------|------|-------|------------------|
-| `'s4hana'` | ✓ | ✗ | ❌ NÃO |
-| `'sap_ecc'` | ✗ | ✓ | ✅ SIM |
-| `'sap_services'` | ✗ | ✗ | ✅ SIM (status ambíguo) |
-| `'business_one'` | ✗ | ✗ | ✅ SIM |
-| `'S/4HANA'` (texto livre) | ✓ | ✗ | ❌ NÃO |
-| `'SAP ECC 6.0'` (texto livre) | ✗ | ✓ | ✅ SIM |
-
----
-
-## Arquivos a Modificar
+## Resumo das Alterações
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/generate-playbook/index.ts` | Corrigir detecção de enum + filtrar dores |
+| `supabase/functions/generate-playbook/index.ts` | 4 modificações |
 
-## Estimativa de Esforço
+### Modificações detalhadas:
 
-- Implementação: ~30 minutos
-- Testes: ~15 minutos
+1. **Linha ~280**: Adicionar `S4_IMPLEMENTED_KEYWORDS`, `ECC_KEYWORDS`, `detectSapStatusFromEvidences()` e `getEffectiveSapStatus()`
+2. **Linha ~388**: Modificar `derivePainsFromContext` para usar `getEffectiveSapStatus()`
+3. **Linha ~680**: Modificar `findRelevantSolutionsEnriched` para usar `getEffectiveSapStatus()`
+4. **Linha ~1000**: Modificar `generateNewSolutions` para usar `getEffectiveSapStatus()`
+
+## Casos de Teste Esperados
+
+| sapStatus do Salesforce | Evidências encontradas | Status Efetivo | Sugere Migração? |
+|-------------------------|------------------------|----------------|------------------|
+| `sap_services` | "Klabin migrou para S/4HANA" | S/4 (via evidência) | NAO |
+| `sap_services` | "Klabin ainda usa ECC" | ECC (via evidência) | SIM |
+| `sap_services` | Nenhuma indicação clara | Ambíguo | SIM (default) |
+| `s4hana` | Qualquer | S/4 (via formulário) | NAO |
+| `sap_ecc` | "Klabin migrou para S/4" | S/4 (via evidência, override) | NAO |
+
+## Resultado Esperado
+
+Para a Klabin:
+- **Antes**: Mostra "Urgência de migração antes do fim de suporte SAP ECC (2027)" + "Conversão SAP S/4HANA Brownfield"
+- **Depois**: 
+  - Se evidências indicam S/4HANA: Mostra dores de otimização/AMS/expansão
+  - Se evidências indicam ECC: Mostra dores de migração (correto)
+  - Se não houver indicação clara: Assume status do formulário
+
+## Impacto
+
+- Corrige o bug onde clientes já em S/4HANA recebem sugestões de migração
+- Melhora a inteligência do sistema usando múltiplas fontes de dados
+- Adiciona logs para facilitar debug futuro
