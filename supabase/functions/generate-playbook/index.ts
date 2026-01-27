@@ -1969,7 +1969,7 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'openai/gpt-5-mini',
         messages: [
           { role: 'system', content: buildSystemPrompt(roleConfig) },
           { role: 'user', content: userPrompt }
