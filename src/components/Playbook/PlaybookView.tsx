@@ -46,6 +46,7 @@ import { ExportPDF } from './ExportPDF';
 import { FeedbackForm } from '@/components/Feedback/FeedbackForm';
 import { MobileBottomNav, type SectionId } from './MobileBottomNav';
 import { MobileLeadCard } from './MobileLeadCard';
+import { SapStatusIndicator } from './SapStatusIndicator';
 
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -582,7 +583,7 @@ ${playbook.approachScript?.fullText || ''}
 
             {/* 4. COMO A META IT PODE AJUDAR */}
             <Card className="p-4 sm:p-6" id="solutions">
-              <button 
+              <button
                 onClick={() => toggleSection('solutions')}
                 className="flex items-center justify-between w-full text-left mb-3 sm:mb-4"
               >
@@ -593,9 +594,16 @@ ${playbook.approachScript?.fullText || ''}
                 </h2>
                 {expandedSections.solutions ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
               </button>
-              
+
               {expandedSections.solutions && (
                 <div className="space-y-4">
+                  {/* Indicador de Status SAP Detectado */}
+                  {playbook.metadata?.sapDetection && (
+                    <SapStatusIndicator
+                      detection={playbook.metadata.sapDetection}
+                      className="mb-4"
+                    />
+                  )}
                   {playbook.metaSolutions?.map((sol, i) => (
                     <div key={i} className="border rounded-lg overflow-hidden bg-card">
                       {/* Header com Dor e Urgência */}

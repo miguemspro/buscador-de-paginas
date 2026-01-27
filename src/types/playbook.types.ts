@@ -114,7 +114,36 @@ export interface RelevantCase {
 }
 
 // ============================================
-// 8) METADADOS DO PLAYBOOK
+// 8) DETECÇÃO DE STATUS SAP
+// ============================================
+export interface SapStatusDetection {
+  // Status detectado
+  detectedStatus: 's4hana_live' | 's4hana_in_progress' | 'ecc' | 'no_sap' | 'unknown';
+
+  // Probabilidade de estar em S/4HANA (0-100%)
+  s4hanaProbability: number;
+
+  // Confiança da detecção
+  confidence: 'alta' | 'media' | 'baixa';
+
+  // Score bruto usado no cálculo
+  rawScore: number;
+
+  // Padrões que deram match
+  matchedPatterns: string[];
+
+  // Evidência principal que levou à conclusão
+  primaryEvidence?: string;
+
+  // Fonte da detecção
+  source: 'evidences' | 'form' | 'combined';
+
+  // Status informado no formulário (para comparação)
+  formStatus?: string;
+}
+
+// ============================================
+// 9) METADADOS DO PLAYBOOK
 // ============================================
 export interface PlaybookMetadata {
   roleLevel: number;           // Nível do cargo (1-5)
@@ -123,6 +152,9 @@ export interface PlaybookMetadata {
   totalCases: number;          // Total de cases ranqueados
   totalSolutions: number;      // Total de soluções mapeadas
   evidencesFound: number;      // Total de evidências encontradas
+
+  // NOVO: Detecção de status SAP
+  sapDetection?: SapStatusDetection;
 }
 
 // ============================================
