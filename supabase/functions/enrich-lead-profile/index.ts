@@ -1,43 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-// Input validation schema
-const EnrichRequestSchema = z.object({
-  linkedinUrl: z.string().min(1, 'LinkedIn URL é obrigatório').max(500)
-});
-
-// Authentication helper
-async function verifyAuth(req: Request): Promise<{ userId: string; email: string }> {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw new Error('Autenticação necessária');
-  }
-
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-  
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } }
-  });
-
-  const token = authHeader.replace('Bearer ', '');
-  const { data, error } = await supabase.auth.getClaims(token);
-  
-  if (error || !data?.claims) {
-    throw new Error('Token inválido ou expirado');
-  }
-
-  return { 
-    userId: data.claims.sub as string, 
-    email: data.claims.email as string 
-  };
-}
 
 // ============================================
 // EXTRAIR USERNAME DO LINKEDIN
@@ -316,36 +283,14 @@ serve(async (req) => {
   }
 
   try {
-    // Authentication check
-    let authUser: { userId: string; email: string };
-    try {
-      authUser = await verifyAuth(req);
-      console.log('Usuário autenticado:', authUser.email);
-    } catch (authError) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Autenticação necessária. Faça login para continuar.',
-          enriched: false
-        }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const body = await req.json();
+    const { linkedinUrl } = await req.json();
     
-    // Input validation
-    const parseResult = EnrichRequestSchema.safeParse(body);
-    if (!parseResult.success) {
+    if (!linkedinUrl) {
       return new Response(
-        JSON.stringify({ 
-          error: parseResult.error.errors[0]?.message || 'Dados inválidos',
-          enriched: false
-        }),
+        JSON.stringify({ error: 'linkedinUrl é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
-    const { linkedinUrl } = parseResult.data;
 
     // 1. Extrair username
     const username = extractLinkedInUsername(linkedinUrl);

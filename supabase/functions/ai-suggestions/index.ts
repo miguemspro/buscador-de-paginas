@@ -1,73 +1,38 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Zod validation schema
-const ConversationMessageSchema = z.object({
-  role: z.string().max(50),
-  content: z.string().max(5000)
-});
+interface ConversationMessage {
+  role: string;
+  content: string;
+}
 
-const ProspectInfoSchema = z.object({
-  company: z.string().max(200),
-  industry: z.string().max(100).optional(),
-  role: z.string().max(100).optional()
-});
+interface ProspectInfo {
+  company: string;
+  industry?: string;
+  role?: string;
+}
 
-const SuggestionRequestSchema = z.object({
-  prospectInfo: ProspectInfoSchema,
-  conversationHistory: z.array(ConversationMessageSchema).max(50),
-  currentPhase: z.string().max(100),
-  templateId: z.string().max(100),
-  nodeTitle: z.string().max(200),
-  customPrompt: z.string().max(2000).optional(),
-  metaItConfig: z.object({
-    empresa: z.object({
-      nome: z.string().max(200),
-      anos_mercado: z.number().max(200),
-      descricao: z.string().max(1000)
-    }),
-    produtos: z.array(z.object({
-      nome: z.string().max(200),
-      descricao: z.string().max(500)
-    })).max(50),
-    diferenciais: z.array(z.string().max(500)).max(20)
-  }),
-  clientesExemplo: z.array(z.string().max(200)).max(20)
-});
-
-type SuggestionRequest = z.infer<typeof SuggestionRequestSchema>;
-
-// Authentication helper
-async function verifyAuth(req: Request): Promise<{ userId: string; email: string }> {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw new Error('Autenticação necessária');
-  }
-
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-  
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } }
-  });
-
-  const token = authHeader.replace('Bearer ', '');
-  const { data, error } = await supabase.auth.getClaims(token);
-  
-  if (error || !data?.claims) {
-    throw new Error('Token inválido ou expirado');
-  }
-
-  return { 
-    userId: data.claims.sub as string, 
-    email: data.claims.email as string 
+interface SuggestionRequest {
+  prospectInfo: ProspectInfo;
+  conversationHistory: ConversationMessage[];
+  currentPhase: string;
+  templateId: string;
+  nodeTitle: string;
+  customPrompt?: string;
+  metaItConfig: {
+    empresa: {
+      nome: string;
+      anos_mercado: number;
+      descricao: string;
+    };
+    produtos: { nome: string; descricao: string }[];
+    diferenciais: string[];
   };
+  clientesExemplo: string[];
 }
 
 serve(async (req) => {
@@ -76,40 +41,7 @@ serve(async (req) => {
   }
 
   try {
-    // Authentication check
-    let authUser: { userId: string; email: string };
-    try {
-      authUser = await verifyAuth(req);
-      console.log('Usuário autenticado:', authUser.email);
-    } catch (authError) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Autenticação necessária. Faça login para continuar.',
-          suggestion: '',
-          reasoning: '',
-          alternatives: []
-        }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const body = await req.json();
-    
-    // Input validation
-    const parseResult = SuggestionRequestSchema.safeParse(body);
-    if (!parseResult.success) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Dados inválidos',
-          suggestion: '',
-          reasoning: parseResult.error.errors.map(e => e.message).join(', '),
-          alternatives: []
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    const request = parseResult.data;
+    const request: SuggestionRequest = await req.json();
     const {
       prospectInfo,
       conversationHistory,
@@ -123,12 +55,11 @@ serve(async (req) => {
 
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     if (!OPENAI_API_KEY) {
-      console.error('OPENAI_API_KEY missing');
       return new Response(
         JSON.stringify({ 
-          error: 'Erro de configuração do serviço',
-          suggestion: '',
-          reasoning: '',
+          error: 'OPENAI_API_KEY não configurada',
+          suggestion: 'Erro: API key não configurada',
+          reasoning: 'Configure a chave da OpenAI nas variáveis de ambiente',
           alternatives: []
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

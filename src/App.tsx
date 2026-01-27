@@ -15,25 +15,11 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Main App - PROTEGIDA */}
-          <Route 
-            path="/" 
-            element={
-              <ProtectedRoute>
-                <Index />
-              </ProtectedRoute>
-            } 
-          />
+          {/* Main App */}
+          <Route path="/" element={<Index />} />
           
-          {/* Dashboard de Métricas - PROTEGIDA */}
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <MetricsDashboard />
-              </ProtectedRoute>
-            } 
-          />
+          {/* Dashboard de Métricas */}
+          <Route path="/dashboard" element={<MetricsDashboard />} />
           
           {/* Admin Login */}
           <Route path="/admin/login" element={<LoginPage />} />

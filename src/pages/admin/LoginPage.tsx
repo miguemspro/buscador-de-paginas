@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,18 +19,8 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-
-  // Redirecionar para a página original ou / se já estiver logado
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
-
-  useEffect(() => {
-    if (user) {
-      navigate(from, { replace: true });
-    }
-  }, [user, navigate, from]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,7 +33,7 @@ export default function LoginPage() {
         setError(error.message);
       } else {
         toast.success('Login realizado com sucesso');
-        navigate(from, { replace: true });
+        navigate('/admin/cases');
       }
     } catch (err) {
       setError('Erro ao fazer login. Tente novamente.');

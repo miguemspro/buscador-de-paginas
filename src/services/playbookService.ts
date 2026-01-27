@@ -2,18 +2,6 @@ import { supabase } from '@/integrations/supabase/client';
 import type { ExtractedLeadData, GeneratedPlaybook } from '@/types/playbook.types';
 import { webSearchService } from './webSearch.service';
 
-// Sanitiza dados removendo valores null (converte para undefined)
-// Isso garante compatibilidade com o schema Zod da edge function
-function sanitizeLeadData(data: ExtractedLeadData): ExtractedLeadData {
-  const sanitized: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (value !== null && value !== undefined && value !== '') {
-      sanitized[key] = value;
-    }
-  }
-  return sanitized as ExtractedLeadData;
-}
-
 export async function extractLeadFromImage(base64Image: string): Promise<ExtractedLeadData> {
   const { data, error } = await supabase.functions.invoke('extract-salesforce-data', {
     body: { imageBase64: base64Image },
@@ -29,23 +17,20 @@ export async function extractLeadFromImage(base64Image: string): Promise<Extract
   }
 
   // A edge function retorna { leadInfo: ... }
-  // Sanitizar os dados para remover nulls
-  return sanitizeLeadData(data.leadInfo);
+  return data.leadInfo;
 }
 
 export async function generatePlaybook(leadData: ExtractedLeadData): Promise<GeneratedPlaybook> {
-  // Sanitizar dados antes de enviar (defesa em profundidade)
-  const sanitizedData = sanitizeLeadData(leadData);
-  console.log('Enviando para generate-playbook:', sanitizedData);
+  console.log('Enviando para generate-playbook:', leadData);
 
   // Executar geração do playbook e pesquisa de evidências em paralelo
   const [playbookResult, evidencesResult] = await Promise.all([
     supabase.functions.invoke('generate-playbook', {
-      body: { leadData: sanitizedData },
+      body: { leadData },
     }),
     // Pesquisar evidências reais sobre a empresa
-    sanitizedData.company
-      ? webSearchService.searchCompanyEvidences(sanitizedData.company, sanitizedData.industry)
+    leadData.company
+      ? webSearchService.searchCompanyEvidences(leadData.company, leadData.industry)
       : Promise.resolve({ sapEvidences: [], techEvidences: [] })
   ]);
 
