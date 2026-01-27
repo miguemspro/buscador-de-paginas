@@ -390,7 +390,7 @@ function derivePainsFromContext(
 }
 
 // ============================================
-// 2.3 - BUSCAR SOLUÇÕES DO BANCO COM CONTEXTO
+// 2.3 - MOTOR INTELIGENTE DE SOLUÇÕES
 // ============================================
 interface MetaSolution {
   id: string;
@@ -412,12 +412,140 @@ interface CompanyContext {
   evidences?: { title: string; indication: string }[];
 }
 
-async function findRelevantSolutions(
-  pains: { pain: string; reason: string; confidence: string }[],
+interface EnrichedSolutionMatch {
+  pain: string;
+  painConfidence: 'alta' | 'media' | 'baixa';
+  solution: MetaSolution;
+  matchScore: number;
+  matchReasons: string[];
+  relatedEvidence?: string;
+  relatedCase?: string;
+  urgencyLevel: 'critical' | 'high' | 'medium' | 'low';
+}
+
+// Critérios de scoring multicritério
+const SOLUTION_SCORING = {
+  painMatch: {
+    exact: 0.40,      // Match exato de dor mapeada
+    partial: 0.25,    // Match parcial por keywords
+    useCase: 0.20     // Match por use_case
+  },
+  context: {
+    sapStatus: 0.25,  // ECC -> prioriza migração, S/4 -> otimização
+    urgency: 0.20,    // Deadline 2027, reforma tributária
+    evidence: 0.20    // Evidência confirma necessidade
+  },
+  alignment: {
+    industry: 0.10,   // Setor compatível
+    modules: 0.15,    // Módulos SAP compatíveis
+    role: 0.05        // Cargo alinhado
+  }
+};
+
+// Determinar nível de urgência baseado no contexto
+function determineUrgencyLevel(
+  pain: string,
+  sapStatus: string | undefined,
+  evidencesText: string
+): 'critical' | 'high' | 'medium' | 'low' {
+  const painLower = pain.toLowerCase();
+  const sapLower = (sapStatus || '').toLowerCase();
+  const evidLower = evidencesText.toLowerCase();
+  
+  // Urgência CRÍTICA
+  if (
+    (sapLower.includes('ecc') && painLower.includes('2027')) ||
+    (painLower.includes('fim de suporte')) ||
+    (painLower.includes('deadline 2027'))
+  ) {
+    return 'critical';
+  }
+  
+  // Urgência ALTA
+  if (
+    painLower.includes('reforma tributária') ||
+    painLower.includes('compliance') ||
+    (sapLower.includes('ecc') && painLower.includes('migração')) ||
+    evidLower.includes('urgente') ||
+    evidLower.includes('prazo')
+  ) {
+    return 'high';
+  }
+  
+  // Urgência MÉDIA
+  if (
+    painLower.includes('otimização') ||
+    painLower.includes('performance') ||
+    painLower.includes('integração') ||
+    painLower.includes('eficiência')
+  ) {
+    return 'medium';
+  }
+  
+  return 'low';
+}
+
+// Encontrar evidência relacionada à dor
+function findRelatedEvidence(
+  pain: string,
+  evidences: { title: string; indication: string }[]
+): string | undefined {
+  const painLower = pain.toLowerCase();
+  const painWords = painLower.split(/\s+/).filter(w => w.length > 4);
+  
+  for (const ev of evidences) {
+    const evText = `${ev.title} ${ev.indication}`.toLowerCase();
+    const matches = painWords.filter(w => evText.includes(w));
+    if (matches.length >= 2) {
+      return ev.title;
+    }
+  }
+  
+  return undefined;
+}
+
+// Encontrar case relacionado à solução
+function findRelatedCase(
+  solution: MetaSolution,
+  rankedCases: RankedCase[]
+): string | undefined {
+  if (rankedCases.length === 0) return undefined;
+  
+  const solLower = solution.name.toLowerCase();
+  const solCategory = solution.category.toLowerCase();
+  
+  for (const rc of rankedCases) {
+    const caseSolutions = rc.case.sap_solutions?.map(s => s.toLowerCase()) || [];
+    const caseType = (rc.case.project_type || '').toLowerCase();
+    
+    // Match por tipo de projeto
+    if (
+      (solLower.includes('migração') && caseType.includes('migra')) ||
+      (solLower.includes('s/4hana') && caseSolutions.some(s => s.includes('s/4'))) ||
+      (solLower.includes('ams') && caseType.includes('ams')) ||
+      (solLower.includes('outsourcing') && caseType.includes('outsourcing')) ||
+      (solLower.includes('rollout') && caseType.includes('rollout'))
+    ) {
+      return `${rc.case.company_name} (${rc.case.title})`;
+    }
+    
+    // Match por categoria
+    if (caseSolutions.some(s => s.includes(solCategory.substring(0, 5)))) {
+      return `${rc.case.company_name}`;
+    }
+  }
+  
+  // Se não houver match específico, retornar o primeiro case (mais relevante)
+  return rankedCases[0] ? `${rankedCases[0].case.company_name}` : undefined;
+}
+
+async function findRelevantSolutionsEnriched(
+  pains: { pain: string; reason: string; confidence: 'alta' | 'media' | 'baixa' }[],
   roleConfig: RoleConfig,
   sapModules: string[] | undefined,
-  companyContext: CompanyContext = {}
-): Promise<{ pain: string; solution: MetaSolution; matchScore: number; matchReason: string }[]> {
+  companyContext: CompanyContext = {},
+  rankedCases: RankedCase[] = []
+): Promise<EnrichedSolutionMatch[]> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseKey);
@@ -444,153 +572,299 @@ async function findRelevantSolutions(
     return sol.target_roles.some(r => roleNames.includes(r));
   });
 
-  console.log(`Soluções filtradas por cargo (${roleLevel}): ${filteredSolutions.length} de ${solutions.length}`);
+  console.log(`Soluções filtradas por cargo (nível ${roleLevel}): ${filteredSolutions.length} de ${solutions.length}`);
 
-  // Contexto para scoring adicional
+  // Contexto para scoring
   const sapStatusLower = (companyContext.sapStatus || '').toLowerCase();
   const isECC = sapStatusLower.includes('ecc') || sapStatusLower.includes('r/3');
   const isS4 = sapStatusLower.includes('s/4') || sapStatusLower.includes('s4hana');
-  const evidencesText = (companyContext.evidences || [])
-    .map(e => `${e.title} ${e.indication}`)
-    .join(' ')
-    .toLowerCase();
+  const industryLower = (companyContext.industry || '').toLowerCase();
+  const evidences = companyContext.evidences || [];
+  const evidencesText = evidences.map(e => `${e.title} ${e.indication}`).join(' ').toLowerCase();
 
-  // Mapear dores para soluções com contexto
-  const mappedSolutions: { pain: string; solution: MetaSolution; matchScore: number; matchReason: string }[] = [];
-  const usedSolutions = new Set<string>(); // Evitar duplicação de soluções
+  // Mapear dores para soluções com scoring multicritério
+  const enrichedMatches: EnrichedSolutionMatch[] = [];
+  const usedSolutions = new Set<string>();
 
   for (const painItem of pains) {
     const { pain, reason, confidence } = painItem;
     const painLower = pain.toLowerCase();
     const reasonLower = reason.toLowerCase();
-    let bestMatch: { solution: MetaSolution; score: number; reason: string } | null = null;
+    let bestMatch: EnrichedSolutionMatch | null = null;
 
     for (const sol of filteredSolutions) {
-      // Pular soluções já usadas
       if (usedSolutions.has(sol.id)) continue;
 
       let score = 0;
       const matchReasons: string[] = [];
 
-      // 1. Match DIRETO por dores relacionadas (peso alto: 0.5)
+      // ========== 1. MATCH DE DOR (peso total: 0.40) ==========
       if (sol.related_pains && sol.related_pains.length > 0) {
         for (const relatedPain of sol.related_pains) {
           const relatedLower = relatedPain.toLowerCase();
-          // Match exato ou parcial
+          
+          // Match exato ou quase exato
           if (painLower.includes(relatedLower) || relatedLower.includes(painLower.substring(0, 15))) {
-            score += 0.5;
+            score += SOLUTION_SCORING.painMatch.exact;
             matchReasons.push(`Dor mapeada: "${relatedPain}"`);
             break;
           }
+          
           // Match por palavras-chave importantes
           const keyWords = relatedLower.split(/\s+/).filter((w: string) => w.length > 4);
           const matches = keyWords.filter((w: string) => painLower.includes(w));
           if (matches.length >= 2) {
-            score += 0.35;
-            matchReasons.push(`Palavras-chave: ${matches.join(', ')}`);
+            score += SOLUTION_SCORING.painMatch.partial;
+            matchReasons.push(`Palavras-chave: ${matches.slice(0, 3).join(', ')}`);
             break;
           }
         }
       }
 
-      // 2. Match por use_cases (peso: 0.3)
+      // ========== 2. MATCH POR USE_CASES (peso: 0.20) ==========
       if (sol.use_cases && sol.use_cases.length > 0) {
         for (const useCase of sol.use_cases) {
           const useCaseLower = useCase.toLowerCase();
           if (painLower.includes(useCaseLower.substring(0, 15)) || 
               useCaseLower.includes(painLower.substring(0, 15))) {
-            score += 0.3;
+            score += SOLUTION_SCORING.painMatch.useCase;
             matchReasons.push(`Caso de uso: "${useCase}"`);
             break;
           }
         }
       }
 
-      // 3. Match por contexto SAP (peso: 0.25)
-      if (isECC && sol.name.toLowerCase().includes('migração')) {
-        score += 0.25;
-        matchReasons.push('Contexto: Empresa em ECC');
+      // ========== 3. CONTEXTO SAP (peso: 0.25) ==========
+      const solNameLower = sol.name.toLowerCase();
+      
+      // ECC com urgência de migração
+      if (isECC) {
+        if (solNameLower.includes('migração') || solNameLower.includes('s/4hana') || solNameLower.includes('conversão')) {
+          score += SOLUTION_SCORING.context.sapStatus;
+          matchReasons.push('Contexto: Empresa em SAP ECC precisa migrar');
+        }
+        if (painLower.includes('2027') || painLower.includes('deadline') || painLower.includes('fim de suporte')) {
+          score += SOLUTION_SCORING.context.urgency;
+          matchReasons.push('Urgência: Deadline 2027 SAP ECC');
+        }
       }
-      if (isECC && sol.name.toLowerCase().includes('s/4hana')) {
-        score += 0.2;
-        matchReasons.push('Contexto: Candidato a S/4HANA');
+      
+      // S/4HANA com necessidade de otimização
+      if (isS4 && (solNameLower.includes('otimização') || solNameLower.includes('ams') || solNameLower.includes('btp'))) {
+        score += SOLUTION_SCORING.context.sapStatus * 0.8;
+        matchReasons.push('Contexto: Empresa em S/4HANA, foco em otimização');
       }
-      if (sol.name.toLowerCase().includes('reforma tributária') && 
-          (evidencesText.includes('tributár') || evidencesText.includes('fiscal') || evidencesText.includes('drc'))) {
-        score += 0.3;
-        matchReasons.push('Contexto: Sinais de reforma tributária');
-      }
-
-      // 4. Match por módulos SAP (peso: 0.2)
-      if (sapModules && sapModules.length > 0 && sol.sap_modules && sol.sap_modules.length > 0) {
-        const moduleMatches = sapModules.filter(m => 
-          sol.sap_modules!.some((sm: string) => sm.toLowerCase().includes(m.toLowerCase()))
-        );
-        if (moduleMatches.length > 0) {
-          score += 0.2;
-          matchReasons.push(`Módulos: ${moduleMatches.join(', ')}`);
+      
+      // Reforma Tributária
+      if (solNameLower.includes('reform') || solNameLower.includes('tributár')) {
+        if (evidencesText.includes('tributár') || evidencesText.includes('fiscal') || evidencesText.includes('drc') ||
+            painLower.includes('fiscal') || painLower.includes('tributár')) {
+          score += SOLUTION_SCORING.context.urgency;
+          matchReasons.push('Urgência: Reforma Tributária brasileira');
         }
       }
 
-      // 5. Match por keywords na descrição (peso: 0.15)
-      const painWords = painLower.split(/\s+/).filter(w => w.length > 4);
-      const descLower = sol.description.toLowerCase();
-      const matchingWords = painWords.filter(w => descLower.includes(w));
-      if (matchingWords.length >= 2) {
-        score += 0.15;
-        matchReasons.push(`Descrição compatível`);
-      }
-
-      // 6. Boost por confiança da dor (alta = +0.1)
-      if (confidence === 'alta' && score > 0) {
-        score += 0.1;
-      }
-
-      // 7. Match por evidências reais (peso: 0.2)
-      if (evidencesText.length > 0) {
+      // ========== 4. EVIDÊNCIAS CONFIRMAM (peso: 0.20) ==========
+      if (evidences.length > 0) {
         const solKeywords = [
           ...(sol.related_pains || []),
           ...(sol.use_cases || []),
-          sol.name
+          sol.name,
+          sol.category
         ].map(k => k.toLowerCase());
         
         for (const keyword of solKeywords) {
-          if (keyword.length > 5 && evidencesText.includes(keyword.substring(0, 10))) {
-            score += 0.2;
+          if (keyword.length > 5 && evidencesText.includes(keyword.substring(0, 8))) {
+            score += SOLUTION_SCORING.context.evidence;
             matchReasons.push('Evidência confirma necessidade');
             break;
           }
         }
       }
 
-      if (score > 0.3 && (!bestMatch || score > bestMatch.score)) {
-        bestMatch = { 
-          solution: sol, 
-          score, 
-          reason: matchReasons.length > 0 ? matchReasons[0] : 'Compatibilidade geral'
+      // ========== 5. MÓDULOS SAP (peso: 0.15) ==========
+      if (sapModules && sapModules.length > 0 && sol.sap_modules && sol.sap_modules.length > 0) {
+        const moduleMatches = sapModules.filter(m => 
+          sol.sap_modules!.some((sm: string) => sm.toLowerCase().includes(m.toLowerCase()))
+        );
+        if (moduleMatches.length > 0) {
+          score += SOLUTION_SCORING.alignment.modules;
+          matchReasons.push(`Módulos: ${moduleMatches.join(', ')}`);
+        }
+      }
+
+      // ========== 6. SETOR COMPATÍVEL (peso: 0.10) ==========
+      const solDescLower = sol.description.toLowerCase();
+      if (industryLower.length > 3) {
+        if (solDescLower.includes(industryLower.substring(0, 5)) || 
+            solDescLower.includes(industryLower.split('/')[0])) {
+          score += SOLUTION_SCORING.alignment.industry;
+          matchReasons.push(`Setor compatível: ${companyContext.industry}`);
+        }
+      }
+
+      // ========== 7. BOOST POR CONFIANÇA DA DOR ==========
+      if (confidence === 'alta' && score > 0) {
+        score += 0.10;
+      } else if (confidence === 'media' && score > 0) {
+        score += 0.05;
+      }
+
+      // Threshold mínimo aumentado para 0.35
+      if (score > 0.35 && (!bestMatch || score > bestMatch.matchScore)) {
+        const urgencyLevel = determineUrgencyLevel(pain, companyContext.sapStatus, evidencesText);
+        const relatedEvidence = findRelatedEvidence(pain, evidences);
+        const relatedCase = findRelatedCase(sol, rankedCases);
+        
+        bestMatch = {
+          pain,
+          painConfidence: confidence,
+          solution: sol,
+          matchScore: Math.min(score, 1.0), // Cap at 100%
+          matchReasons,
+          relatedEvidence,
+          relatedCase,
+          urgencyLevel
         };
       }
     }
 
     if (bestMatch) {
       usedSolutions.add(bestMatch.solution.id);
-      mappedSolutions.push({
-        pain,
-        solution: bestMatch.solution,
-        matchScore: bestMatch.score,
-        matchReason: bestMatch.reason
-      });
+      enrichedMatches.push(bestMatch);
     }
   }
 
-  // Ordenar por score e limitar a 5 soluções mais relevantes
-  mappedSolutions.sort((a, b) => b.matchScore - a.matchScore);
-  const topSolutions = mappedSolutions.slice(0, 5);
+  // Ordenar por: urgência crítica primeiro, depois por score
+  enrichedMatches.sort((a, b) => {
+    const urgencyOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+    const urgencyDiff = urgencyOrder[b.urgencyLevel] - urgencyOrder[a.urgencyLevel];
+    if (urgencyDiff !== 0) return urgencyDiff;
+    return b.matchScore - a.matchScore;
+  });
+
+  // Aumentar limite para 7 soluções
+  const topSolutions = enrichedMatches.slice(0, 7);
   
-  console.log(`Top ${topSolutions.length} soluções mapeadas:`, 
-    topSolutions.map(s => `${s.solution.name} (${(s.matchScore * 100).toFixed(0)}%)`));
+  console.log(`Top ${topSolutions.length} soluções mapeadas (motor inteligente):`, 
+    topSolutions.map(s => `${s.solution.name} (${(s.matchScore * 100).toFixed(0)}% | ${s.urgencyLevel})`));
 
   return topSolutions;
+}
+
+// Gerar descrições personalizadas via IA em batch
+async function generatePersonalizedDescriptions(
+  solutions: EnrichedSolutionMatch[],
+  leadData: {
+    company: string;
+    industry: string;
+    role: string;
+    sapStatus: string;
+  },
+  roleConfig: RoleConfig
+): Promise<Map<string, string>> {
+  const descriptionsMap = new Map<string, string>();
+  
+  if (solutions.length === 0) return descriptionsMap;
+
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  if (!LOVABLE_API_KEY) {
+    console.warn('LOVABLE_API_KEY não disponível para personalização');
+    return descriptionsMap;
+  }
+
+  try {
+    const solutionsContext = solutions.map((s, i) => 
+      `${i + 1}. DOR: "${s.pain}" (${s.painConfidence})\n   SOLUÇÃO: ${s.solution.name}\n   DESCRIÇÃO BASE: ${s.solution.description}\n   EVIDÊNCIA: ${s.relatedEvidence || 'Não identificada'}\n   CASE: ${s.relatedCase || 'Não identificado'}`
+    ).join('\n\n');
+
+    const prompt = `Você é um consultor SAP sênior da Meta IT. Para cada solução abaixo, gere uma descrição PERSONALIZADA de 2-3 frases explicando COMO ela resolve a dor ESPECÍFICA deste cliente.
+
+CONTEXTO DO CLIENTE:
+- Empresa: ${leadData.company || 'Empresa'}
+- Setor: ${leadData.industry || 'Não informado'}
+- Status SAP: ${leadData.sapStatus || 'Não informado'}
+- Cargo do Lead: ${leadData.role || 'Não informado'}
+- Linguagem: ${roleConfig.language}
+
+SOLUÇÕES A PERSONALIZAR:
+${solutionsContext}
+
+INSTRUÇÕES:
+- Seja específico para o contexto DESTE cliente
+- Mencione o benefício principal para a situação específica
+- Conecte com a evidência ou case quando disponível
+- Use linguagem ${roleConfig.language}
+- NÃO use frases genéricas como "melhoria operacional"
+- Foque em COMO a solução resolve a dor específica
+
+Retorne um JSON com array de objetos {index: number, description: string}`;
+
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: [
+          { role: 'system', content: 'Você é um especialista em vendas consultivas SAP. Responda APENAS com JSON válido.' },
+          { role: 'user', content: prompt }
+        ],
+        tools: [{
+          type: 'function',
+          function: {
+            name: 'return_descriptions',
+            description: 'Retorna descrições personalizadas para cada solução',
+            parameters: {
+              type: 'object',
+              properties: {
+                descriptions: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      index: { type: 'number' },
+                      description: { type: 'string' }
+                    },
+                    required: ['index', 'description']
+                  }
+                }
+              },
+              required: ['descriptions']
+            }
+          }
+        }],
+        tool_choice: { type: 'function', function: { name: 'return_descriptions' } }
+      }),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      const toolCall = result.choices?.[0]?.message?.tool_calls?.[0];
+      
+      if (toolCall && toolCall.function.name === 'return_descriptions') {
+        const parsed = JSON.parse(toolCall.function.arguments);
+        
+        if (parsed.descriptions && Array.isArray(parsed.descriptions)) {
+          for (const desc of parsed.descriptions) {
+            if (desc.index >= 1 && desc.index <= solutions.length && desc.description) {
+              const solutionId = solutions[desc.index - 1].solution.id;
+              descriptionsMap.set(solutionId, desc.description);
+            }
+          }
+          console.log(`Descrições personalizadas geradas: ${descriptionsMap.size} de ${solutions.length}`);
+        }
+      }
+    } else {
+      console.warn('Erro ao gerar descrições personalizadas:', response.status);
+    }
+  } catch (error) {
+    console.warn('Falha na geração de descrições personalizadas:', error);
+  }
+
+  return descriptionsMap;
 }
 
 // ============================================
@@ -776,9 +1050,9 @@ serve(async (req) => {
     );
     console.log(`Cases ranqueados: ${rankedCases.length}`);
 
-    // 2.3 - Buscar soluções do banco COM CONTEXTO
-    console.log('Mapeando soluções para dores com contexto...');
-    const mappedSolutions = await findRelevantSolutions(
+    // 2.3 - Motor Inteligente de Soluções com Scoring Multicritério
+    console.log('Mapeando soluções para dores com motor inteligente...');
+    const mappedSolutions = await findRelevantSolutionsEnriched(
       derivedPains,
       roleConfig,
       leadData.sapModules,
@@ -787,9 +1061,23 @@ serve(async (req) => {
         industry: leadData.industry,
         companySize: leadData.companySize,
         evidences: realEvidences
-      }
+      },
+      rankedCases
     );
-    console.log(`Soluções mapeadas: ${mappedSolutions.length}`);
+    console.log(`Soluções mapeadas (motor inteligente): ${mappedSolutions.length}`);
+
+    // Gerar descrições personalizadas via IA
+    console.log('Gerando descrições personalizadas via IA...');
+    const personalizedDescriptions = await generatePersonalizedDescriptions(
+      mappedSolutions,
+      {
+        company: leadData.company || '',
+        industry: leadData.industry || '',
+        role: leadData.role || '',
+        sapStatus: leadData.sapStatus || ''
+      },
+      roleConfig
+    );
 
     // Montar contexto enriquecido para o prompt
     const evidencesText = realEvidences.length > 0
@@ -807,9 +1095,10 @@ serve(async (req) => {
       : 'Nenhum case específico encontrado para este contexto.';
 
     const solutionsText = mappedSolutions.length > 0
-      ? mappedSolutions.map(ms => 
-          `- Para "${ms.pain}": ${ms.solution.name}\n  Descrição: ${ms.solution.description}\n  Resultado esperado: ${ms.solution.expected_result || 'Melhoria operacional'}\n  Motivo: ${ms.matchReason} (${(ms.matchScore * 100).toFixed(0)}%)`
-        ).join('\n\n')
+      ? mappedSolutions.map((ms: EnrichedSolutionMatch) => {
+          const personalizedDesc = personalizedDescriptions.get(ms.solution.id);
+          return `- Para "${ms.pain}" (${ms.urgencyLevel}): ${ms.solution.name}\n  Descrição: ${personalizedDesc || ms.solution.description}\n  Resultado esperado: ${ms.solution.expected_result || 'Melhoria operacional'}\n  Motivos: ${ms.matchReasons.join(', ')} (${(ms.matchScore * 100).toFixed(0)}%)\n  Case relacionado: ${ms.relatedCase || 'N/A'}`;
+        }).join('\n\n')
       : 'Soluções a serem exploradas com base no discovery.';
 
     // Contexto do lead
@@ -1049,16 +1338,25 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
       playbook.probablePains = derivedPains;
     }
 
-    // FORÇAR uso das soluções mapeadas do banco (sempre, não apenas se IA não gerou)
+    // FORÇAR uso das soluções mapeadas do banco com motor inteligente
     // Isso garante que as soluções sejam baseadas nas dores e contexto real
-    playbook.metaSolutions = mappedSolutions.map(ms => ({
-      pain: ms.pain,
-      solution: ms.solution.name,
-      description: ms.solution.expected_result || ms.solution.description,
-      benefits: ms.solution.benefits?.slice(0, 3) || [],
-      matchReason: ms.matchReason,
-      matchScore: ms.matchScore
-    }));
+    playbook.metaSolutions = mappedSolutions.map((ms: EnrichedSolutionMatch) => {
+      const personalizedDesc = personalizedDescriptions.get(ms.solution.id);
+      return {
+        pain: ms.pain,
+        painConfidence: ms.painConfidence,
+        solution: ms.solution.name,
+        description: ms.solution.expected_result || ms.solution.description,
+        personalizedDescription: personalizedDesc,
+        benefits: ms.solution.benefits?.slice(0, 3) || [],
+        matchReason: ms.matchReasons[0] || 'Compatibilidade geral',
+        matchReasons: ms.matchReasons,
+        matchScore: ms.matchScore,
+        relatedEvidence: ms.relatedEvidence,
+        relatedCase: ms.relatedCase,
+        urgencyLevel: ms.urgencyLevel
+      };
+    });
 
     // Adicionar cases ranqueados
     playbook.relevantCases = rankedCases.map(rc => ({
