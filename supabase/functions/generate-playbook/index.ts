@@ -278,6 +278,121 @@ function isClientOnECC(sapStatus: string | undefined): boolean {
   return false;
 }
 
+// ============================================
+// DETECÇÃO INTELIGENTE DE STATUS SAP VIA EVIDÊNCIAS
+// ============================================
+
+// Palavras-chave que indicam S/4HANA JÁ IMPLEMENTADO
+const S4_IMPLEMENTED_KEYWORDS = [
+  'implementou s/4',
+  'implementou s4',
+  'migrou para s/4',
+  'migrou para s4',
+  'implantou s/4',
+  'implantou s4',
+  'go-live s/4',
+  'go-live s4',
+  'já está em s/4',
+  'já está em s4',
+  'opera em s/4',
+  'opera em s4',
+  'utiliza s/4',
+  'utiliza s4',
+  'adotou s/4',
+  'adotou s4',
+  'concluiu migração',
+  'concluída migração',
+  'finalizada migração para s/4',
+  's/4hana em produção',
+  's4hana em produção',
+  'projeto s/4hana concluído',
+  'projeto s4hana concluído',
+  'já migrou',
+  'migração concluída',
+  'transição para s/4 finalizada'
+];
+
+// Palavras-chave que indicam cliente ainda em ECC (precisa migrar)
+const ECC_STILL_KEYWORDS = [
+  'ainda em ecc',
+  'utiliza ecc',
+  'opera em ecc',
+  'precisa migrar',
+  'planejando migração',
+  'roadmap de migração',
+  'projeto de migração em andamento',
+  'avaliando migração',
+  'preparando para migrar',
+  'iniciando jornada s/4'
+];
+
+// Detectar status SAP baseado nas evidências encontradas
+function detectSapStatusFromEvidences(
+  evidences: { title: string; indication: string }[]
+): 's4hana' | 'ecc' | null {
+  console.log(`[SAP Detection] Analisando ${evidences.length} evidências para detectar status SAP real`);
+  
+  for (const evidence of evidences) {
+    const text = `${evidence.title} ${evidence.indication}`.toLowerCase();
+    
+    // Verificar se indica S/4HANA já implementado
+    for (const keyword of S4_IMPLEMENTED_KEYWORDS) {
+      if (text.includes(keyword)) {
+        console.log(`[SAP Detection] Evidência indica S/4HANA implementado: "${evidence.title}"`);
+        return 's4hana';
+      }
+    }
+    
+    // Verificar se indica ainda em ECC
+    for (const keyword of ECC_STILL_KEYWORDS) {
+      if (text.includes(keyword)) {
+        console.log(`[SAP Detection] Evidência indica ainda em ECC: "${evidence.title}"`);
+        return 'ecc';
+      }
+    }
+  }
+  
+  return null; // Não foi possível determinar
+}
+
+// Função combinada que usa ambas as fontes (formulário + evidências)
+function getEffectiveSapStatus(
+  sapStatusFromForm: string | undefined,
+  evidences: { title: string; indication: string }[]
+): { isS4: boolean; isECC: boolean; source: 'form' | 'evidence' | 'unknown' } {
+  
+  // 1. Tentar detectar pelo formulário primeiro
+  const formIsS4 = isClientOnS4HANA(sapStatusFromForm);
+  const formIsECC = isClientOnECC(sapStatusFromForm);
+  
+  // Se o formulário indica CLARAMENTE S/4 ou ECC, usar isso
+  if (formIsS4) {
+    console.log(`[SAP Status] Formulário indica S/4HANA claramente`);
+    return { isS4: true, isECC: false, source: 'form' };
+  }
+  if (formIsECC) {
+    console.log(`[SAP Status] Formulário indica ECC claramente`);
+    return { isS4: false, isECC: true, source: 'form' };
+  }
+  
+  // 2. Se formulário é ambíguo (sap_services, unknown, etc), verificar evidências
+  const evidenceStatus = detectSapStatusFromEvidences(evidences);
+  
+  if (evidenceStatus === 's4hana') {
+    console.log(`[SAP Status Override] Formulário diz "${sapStatusFromForm}", mas evidências indicam S/4HANA`);
+    return { isS4: true, isECC: false, source: 'evidence' };
+  }
+  
+  if (evidenceStatus === 'ecc') {
+    console.log(`[SAP Status Override] Formulário diz "${sapStatusFromForm}", mas evidências indicam ECC`);
+    return { isS4: false, isECC: true, source: 'evidence' };
+  }
+  
+  // 3. Não foi possível determinar - assumir status ambíguo
+  console.log(`[SAP Status] Status ambíguo - formulário: "${sapStatusFromForm}", sem evidências claras`);
+  return { isS4: false, isECC: false, source: 'unknown' };
+}
+
 // Verificar se uma dor é relacionada a migração S/4HANA
 function isMigrationPain(pain: string): boolean {
   const painLower = pain.toLowerCase();
@@ -286,13 +401,25 @@ function isMigrationPain(pain: string): boolean {
 
 function isSolutionCompatibleWithSapStatus(
   solutionName: string, 
-  sapStatus: string | undefined
+  sapStatus: string | undefined,
+  evidences?: { title: string; indication: string }[]
 ): boolean {
-  if (!sapStatus) return true; // Se não soubermos o status, permitir tudo
+  // Se temos evidências, usar detecção inteligente
+  if (evidences && evidences.length > 0) {
+    const effectiveStatus = getEffectiveSapStatus(sapStatus, evidences);
+    
+    if (effectiveStatus.isS4 && isMigrationToS4Solution(solutionName)) {
+      console.log(`[SAP Filter] Status efetivo S/4HANA (via ${effectiveStatus.source}) - excluindo migração: "${solutionName}"`);
+      return false;
+    }
+    return true;
+  }
   
-  // Se cliente está em S/4HANA, excluir soluções de migração PARA S/4
+  // Fallback: usar apenas o status do formulário
+  if (!sapStatus) return true;
+  
   if (isClientOnS4HANA(sapStatus) && isMigrationToS4Solution(solutionName)) {
-    console.log(`[SAP Filter] Cliente em S/4HANA - excluindo migração: "${solutionName}"`);
+    console.log(`[SAP Filter] Cliente em S/4HANA (via form) - excluindo migração: "${solutionName}"`);
     return false;
   }
   
@@ -384,11 +511,12 @@ function derivePainsFromContext(
   const pains: { pain: string; reason: string; confidence: 'alta' | 'media' | 'baixa' }[] = [];
   const addedPains = new Set<string>();
   
-  // IMPORTANTE: Verificar status SAP para filtrar dores irrelevantes
-  const clientIsOnS4 = isClientOnS4HANA(sapStatus);
-  const clientIsOnECC = isClientOnECC(sapStatus);
+  // IMPORTANTE: Usar detecção INTELIGENTE que combina formulário + evidências
+  const effectiveStatus = getEffectiveSapStatus(sapStatus, evidences);
+  const clientIsOnS4 = effectiveStatus.isS4;
+  const clientIsOnECC = effectiveStatus.isECC;
   
-  console.log(`[SAP Status] Valor: "${sapStatus}" | É S/4: ${clientIsOnS4} | É ECC: ${clientIsOnECC}`);
+  console.log(`[SAP Status] Formulário: "${sapStatus}" | Efetivo: É S/4: ${clientIsOnS4} | É ECC: ${clientIsOnECC} | Fonte: ${effectiveStatus.source}`);
 
   // 1. Derivar dores das evidências encontradas
   for (const evidence of evidences) {
@@ -705,23 +833,23 @@ async function findRelevantSolutionsEnriched(
 
   console.log(`Soluções filtradas por cargo (nível ${roleLevel}): ${filteredByRole.length} de ${solutions.length}`);
 
-  // FILTRO DE COMPATIBILIDADE SAP: Excluir soluções de migração S/4 para clientes já em S/4
+  // FILTRO DE COMPATIBILIDADE SAP: Usar detecção inteligente (formulário + evidências)
+  const evidences = companyContext.evidences || [];
   const filteredSolutions = filteredByRole.filter((sol: MetaSolution) => {
-    const isCompatible = isSolutionCompatibleWithSapStatus(sol.name, companyContext.sapStatus);
+    const isCompatible = isSolutionCompatibleWithSapStatus(sol.name, companyContext.sapStatus, evidences);
     if (!isCompatible) {
-      console.log(`Solução "${sol.name}" excluída - incompatível com status SAP: ${companyContext.sapStatus}`);
+      console.log(`Solução "${sol.name}" excluída - incompatível com status SAP efetivo`);
     }
     return isCompatible;
   });
 
   console.log(`Soluções após filtro SAP: ${filteredSolutions.length} de ${filteredByRole.length}`);
 
-  // Contexto para scoring
-  const sapStatusLower = (companyContext.sapStatus || '').toLowerCase();
-  const isECC = sapStatusLower.includes('ecc') || sapStatusLower.includes('r/3');
-  const isS4 = sapStatusLower.includes('s/4') || sapStatusLower.includes('s4hana');
+  // Contexto para scoring - USAR DETECÇÃO INTELIGENTE
+  const effectiveStatus = getEffectiveSapStatus(companyContext.sapStatus, evidences);
+  const isECC = effectiveStatus.isECC;
+  const isS4 = effectiveStatus.isS4;
   const industryLower = (companyContext.industry || '').toLowerCase();
-  const evidences = companyContext.evidences || [];
   const evidencesText = evidences.map(e => `${e.title} ${e.indication}`).join(' ').toLowerCase();
 
   // Mapear dores para soluções com scoring multicritério
@@ -933,16 +1061,18 @@ async function generateNewSolutions(
   // Limitar a 3 soluções novas
   const painsToSolve = unmappedPains.slice(0, 3);
   
-  // Construir análise do cenário
-  const sapLower = (context.sapStatus || '').toLowerCase();
-  const isECC = sapLower.includes('ecc') || sapLower.includes('r/3');
-  const isS4 = sapLower.includes('s/4') || sapLower.includes('s4hana');
+  // Construir análise do cenário - USAR DETECÇÃO INTELIGENTE
+  const effectiveStatus = getEffectiveSapStatus(context.sapStatus, evidences);
+  const isECC = effectiveStatus.isECC;
+  const isS4 = effectiveStatus.isS4;
+  
+  console.log(`[generateNewSolutions] Status efetivo: isS4=${isS4}, isECC=${isECC}, fonte=${effectiveStatus.source}`);
   
   let scenarioAnalysis = '';
   if (isECC) {
     scenarioAnalysis = `Empresa em SAP ECC com deadline de 2027 para migração. Cenário típico de urgência moderada a alta para iniciar planejamento de migração S/4HANA.`;
   } else if (isS4) {
-    scenarioAnalysis = `Empresa já em S/4HANA, foco em otimização, estabilização pós-go-live e exploração de novas funcionalidades.`;
+    scenarioAnalysis = `Empresa já em S/4HANA, foco em otimização, estabilização pós-go-live e exploração de novas funcionalidades. NÃO sugerir migração ou conversão.`;
   } else {
     scenarioAnalysis = `Status SAP a confirmar durante discovery. Pode haver oportunidade de modernização ou suporte.`;
   }
@@ -1107,11 +1237,11 @@ EXEMPLO BOM (personalizado):
         const parsed = JSON.parse(toolCall.function.arguments);
         
         if (parsed.solutions && Array.isArray(parsed.solutions)) {
-          // VALIDAÇÃO DE SAÍDA: Filtrar soluções incompatíveis geradas pela IA
+          // VALIDAÇÃO DE SAÍDA: Filtrar soluções incompatíveis usando detecção inteligente
           const compatibleSolutions = parsed.solutions.filter((sol: GeneratedSolution) => {
-            const isCompatible = isSolutionCompatibleWithSapStatus(sol.solution, context.sapStatus);
+            const isCompatible = isSolutionCompatibleWithSapStatus(sol.solution, context.sapStatus, evidences);
             if (!isCompatible) {
-              console.log(`Solução gerada "${sol.solution}" descartada - incompatível com S/4HANA`);
+              console.log(`Solução gerada "${sol.solution}" descartada - incompatível com status SAP efetivo (S/4HANA)`);
             }
             return isCompatible;
           });
