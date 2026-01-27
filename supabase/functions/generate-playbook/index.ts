@@ -539,6 +539,23 @@ function findRelatedCase(
   return rankedCases[0] ? `${rankedCases[0].case.company_name}` : undefined;
 }
 
+// ============================================
+// MAPEAMENTO DE CARGOS PARA FILTRO
+// ============================================
+const ROLE_CATEGORY_MAP: Record<string, string[]> = {
+  'C-level': ['CEO', 'CFO', 'CIO', 'CTO', 'COO', 'Presidente', 'VP', 'Vice', 'Chief', 'Diretor Executivo', 'Diretor-Geral'],
+  'Diretor': ['Diretor', 'Director', 'Head of', 'Head', 'VP de', 'Vice-Presidente'],
+  'Gerente': ['Gerente', 'Manager', 'Gestor', 'Supervisor', 'Coordenador', 'Controller', 'Líder'],
+  'Especialista': ['Especialista', 'Analyst', 'Analista', 'Consultor', 'Arquiteto', 'Developer', 'Desenvolvedor', 'Engineer', 'Engenheiro', 'Técnico'],
+  'Key User': ['Key User', 'Usuário Chave', 'Usuário-Chave', 'Operador', 'Assistente', 'Operacional']
+};
+
+function targetRoleMatchesCategory(targetRole: string, category: string): boolean {
+  const patterns = ROLE_CATEGORY_MAP[category] || [];
+  const targetLower = targetRole.toLowerCase();
+  return patterns.some(pattern => targetLower.includes(pattern.toLowerCase()));
+}
+
 async function findRelevantSolutionsEnriched(
   pains: { pain: string; reason: string; confidence: 'alta' | 'media' | 'baixa' }[],
   roleConfig: RoleConfig,
@@ -566,10 +583,14 @@ async function findRelevantSolutionsEnriched(
     .filter(([_, config]) => config.level >= roleLevel)
     .map(([name]) => name);
 
-  // Filtrar soluções por cargo
+  // Filtrar soluções por cargo - CORRIGIDO com mapeamento
   const filteredSolutions = solutions.filter((sol: MetaSolution) => {
     if (!sol.target_roles || sol.target_roles.length === 0) return true;
-    return sol.target_roles.some(r => roleNames.includes(r));
+    
+    // Verificar se algum target_role da solução corresponde às categorias permitidas
+    return sol.target_roles.some((targetRole: string) => 
+      roleNames.some(category => targetRoleMatchesCategory(targetRole, category))
+    );
   });
 
   console.log(`Soluções filtradas por cargo (nível ${roleLevel}): ${filteredSolutions.length} de ${solutions.length}`);
@@ -743,13 +764,231 @@ async function findRelevantSolutionsEnriched(
     return b.matchScore - a.matchScore;
   });
 
-  // Aumentar limite para 7 soluções
+// Aumentar limite para 7 soluções
   const topSolutions = enrichedMatches.slice(0, 7);
   
   console.log(`Top ${topSolutions.length} soluções mapeadas (motor inteligente):`, 
     topSolutions.map(s => `${s.solution.name} (${(s.matchScore * 100).toFixed(0)}% | ${s.urgencyLevel})`));
 
   return topSolutions;
+}
+
+// ============================================
+// GERAÇÃO DE SOLUÇÕES VIA IA (PARA DORES NÃO MAPEADAS)
+// ============================================
+interface GeneratedSolution {
+  pain: string;
+  solution: string;
+  description: string;
+  benefits: string[];
+  type: 'diagnostico' | 'projeto' | 'servico_continuo';
+  estimatedTimeline?: string;
+  connectionToEvidence?: string;
+  connectionToCase?: string;
+}
+
+async function generateNewSolutions(
+  unmappedPains: { pain: string; reason: string; confidence: 'alta' | 'media' | 'baixa' }[],
+  mappedSolutions: EnrichedSolutionMatch[],
+  context: {
+    company: string;
+    industry: string;
+    role: string;
+    sapStatus: string;
+    companySize: string;
+  },
+  evidences: { title: string; indication: string }[],
+  cases: RankedCase[],
+  roleConfig: RoleConfig
+): Promise<GeneratedSolution[]> {
+  if (unmappedPains.length === 0) return [];
+  
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  if (!LOVABLE_API_KEY) {
+    console.warn('LOVABLE_API_KEY não disponível para geração de soluções');
+    return [];
+  }
+
+  // Limitar a 3 soluções novas
+  const painsToSolve = unmappedPains.slice(0, 3);
+  
+  // Construir análise do cenário
+  const sapLower = (context.sapStatus || '').toLowerCase();
+  const isECC = sapLower.includes('ecc') || sapLower.includes('r/3');
+  const isS4 = sapLower.includes('s/4') || sapLower.includes('s4hana');
+  
+  let scenarioAnalysis = '';
+  if (isECC) {
+    scenarioAnalysis = `Empresa em SAP ECC com deadline de 2027 para migração. Cenário típico de urgência moderada a alta para iniciar planejamento de migração S/4HANA.`;
+  } else if (isS4) {
+    scenarioAnalysis = `Empresa já em S/4HANA, foco em otimização, estabilização pós-go-live e exploração de novas funcionalidades.`;
+  } else {
+    scenarioAnalysis = `Status SAP a confirmar durante discovery. Pode haver oportunidade de modernização ou suporte.`;
+  }
+  
+  const evidencesList = evidences.length > 0 
+    ? evidences.map(e => `- ${e.title}: ${e.indication}`).join('\n')
+    : 'Nenhuma evidência específica encontrada';
+    
+  const mappedSolutionsList = mappedSolutions.length > 0
+    ? mappedSolutions.map(s => s.solution.name).join(', ')
+    : 'Nenhuma';
+    
+  const casesList = cases.length > 0
+    ? cases.map(c => `- ${c.case.company_name}: ${c.case.title}`).join('\n')
+    : 'Nenhum case específico';
+
+  const prompt = `<role>
+Você é um arquiteto de soluções SAP sênior da Meta IT com 15+ anos de experiência 
+em projetos de transformação digital. Sua especialidade é criar propostas de valor 
+personalizadas que conectam dores de negócio a soluções tecnológicas concretas.
+</role>
+
+<context>
+CLIENTE EM ANÁLISE:
+- Empresa: ${context.company || 'Não informada'}
+- Setor: ${context.industry || 'Não informado'}
+- Porte: ${context.companySize || 'Não informado'}
+- Status SAP Atual: ${context.sapStatus || 'Não informado'}
+- Cargo do Lead: ${context.role || 'Não informado'}
+
+CENÁRIO IDENTIFICADO:
+${scenarioAnalysis}
+
+EVIDÊNCIAS REAIS ENCONTRADAS:
+${evidencesList}
+
+DORES SEM SOLUÇÃO MAPEADA:
+${painsToSolve.map(p => `- ${p.pain} (${p.confidence})`).join('\n')}
+
+SOLUÇÕES JÁ MAPEADAS (evitar duplicação):
+${mappedSolutionsList}
+
+CASES DE SUCESSO RELEVANTES:
+${casesList}
+</context>
+
+<task>
+Para cada dor sem solução mapeada, crie UMA solução personalizada seguindo estas regras:
+</task>
+
+<rules>
+1. ESPECIFICIDADE OBRIGATÓRIA:
+   - Mencione o nome da empresa quando disponível
+   - Conecte com evidência real quando disponível
+   - Referencie case similar se existir
+   - Use números e prazos realistas
+
+2. ESTRUTURA DA SOLUÇÃO:
+   - Nome: Título claro e profissional (sem genéricos como "Consultoria SAP")
+   - Descrição: 2-3 frases explicando COMO resolve AQUELA dor específica
+   - Benefícios: 3 benefícios específicos para o contexto
+   - Tipo: "diagnostico" | "projeto" | "servico_continuo"
+   - Prazo estimado: Realista para o escopo
+
+3. LINGUAGEM:
+   - Adaptar para ${roleConfig.language}
+   - Focar em: ${roleConfig.priorityTopics.join(', ')}
+   - Evitar: ${roleConfig.excludeTopics.join(', ')}
+
+4. REALISMO - Só sugerir o que a Meta IT realmente pode entregar:
+   - Migração SAP S/4HANA (Brownfield/Greenfield)
+   - AMS (Application Management Services)
+   - Outsourcing de equipe SAP
+   - SAP BTP e integrações
+   - Adequação à Reforma Tributária
+   - Rollouts internacionais
+   - Consultoria e diagnósticos
+</rules>
+
+<examples>
+EXEMPLO RUIM (genérico):
+{
+  "solution": "Consultoria SAP",
+  "description": "Oferecemos consultoria para melhorar seus processos SAP."
+}
+
+EXEMPLO BOM (personalizado):
+{
+  "solution": "Diagnóstico de Prontidão para Migração S/4HANA",
+  "description": "Para uma empresa em SAP ECC que enfrenta o deadline de 2027, propomos um diagnóstico de 3 semanas para mapear customizações críticas, integrações existentes e definir o roadmap ideal de migração. Similar ao que fizemos na Bruning, onde identificamos 40% de código obsoleto que pôde ser descartado.",
+  "benefits": [
+    "Clareza sobre investimento necessário em 3 semanas",
+    "Identificação de quick wins e riscos antecipados",
+    "Roadmap priorizado alinhado ao deadline 2027"
+  ],
+  "type": "diagnostico",
+  "estimatedTimeline": "3 semanas"
+}
+</examples>`;
+
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: [
+          { role: 'system', content: 'Você é um arquiteto de soluções SAP. Responda APENAS com JSON válido.' },
+          { role: 'user', content: prompt }
+        ],
+        tools: [{
+          type: 'function',
+          function: {
+            name: 'generate_custom_solutions',
+            description: 'Gera soluções personalizadas para dores não mapeadas',
+            parameters: {
+              type: 'object',
+              properties: {
+                solutions: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      pain: { type: 'string' },
+                      solution: { type: 'string' },
+                      description: { type: 'string' },
+                      benefits: { type: 'array', items: { type: 'string' } },
+                      type: { type: 'string', enum: ['diagnostico', 'projeto', 'servico_continuo'] },
+                      estimatedTimeline: { type: 'string' },
+                      connectionToEvidence: { type: 'string' },
+                      connectionToCase: { type: 'string' }
+                    },
+                    required: ['pain', 'solution', 'description', 'benefits', 'type']
+                  }
+                }
+              },
+              required: ['solutions']
+            }
+          }
+        }],
+        tool_choice: { type: 'function', function: { name: 'generate_custom_solutions' } }
+      }),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      const toolCall = result.choices?.[0]?.message?.tool_calls?.[0];
+      
+      if (toolCall && toolCall.function.name === 'generate_custom_solutions') {
+        const parsed = JSON.parse(toolCall.function.arguments);
+        
+        if (parsed.solutions && Array.isArray(parsed.solutions)) {
+          console.log(`Soluções geradas via IA: ${parsed.solutions.length}`);
+          return parsed.solutions;
+        }
+      }
+    } else {
+      console.warn('Erro ao gerar soluções via IA:', response.status);
+    }
+  } catch (error) {
+    console.warn('Falha na geração de soluções via IA:', error);
+  }
+
+  return [];
 }
 
 // Gerar descrições personalizadas via IA em batch
@@ -1066,7 +1305,35 @@ serve(async (req) => {
     );
     console.log(`Soluções mapeadas (motor inteligente): ${mappedSolutions.length}`);
 
-    // Gerar descrições personalizadas via IA
+    // ============================================
+    // IDENTIFICAR LACUNAS E GERAR SOLUÇÕES VIA IA
+    // ============================================
+    const coveredPains = new Set(mappedSolutions.map(ms => ms.pain));
+    const unmappedPains = derivedPains.filter(p => !coveredPains.has(p.pain));
+    console.log(`Dores sem solução mapeada: ${unmappedPains.length}`);
+
+    // Gerar soluções para dores não mapeadas (máximo 3)
+    let generatedSolutions: GeneratedSolution[] = [];
+    if (unmappedPains.length > 0 && mappedSolutions.length < 7) {
+      console.log('Gerando soluções via IA para dores não mapeadas...');
+      generatedSolutions = await generateNewSolutions(
+        unmappedPains,
+        mappedSolutions,
+        {
+          company: leadData.company || '',
+          industry: leadData.industry || '',
+          role: leadData.role || '',
+          sapStatus: leadData.sapStatus || '',
+          companySize: leadData.companySize || ''
+        },
+        realEvidences,
+        rankedCases,
+        roleConfig
+      );
+      console.log(`Soluções geradas via IA: ${generatedSolutions.length}`);
+    }
+
+    // Gerar descrições personalizadas via IA para soluções existentes
     console.log('Gerando descrições personalizadas via IA...');
     const personalizedDescriptions = await generatePersonalizedDescriptions(
       mappedSolutions,
@@ -1338,9 +1605,12 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
       playbook.probablePains = derivedPains;
     }
 
-    // FORÇAR uso das soluções mapeadas do banco com motor inteligente
-    // Isso garante que as soluções sejam baseadas nas dores e contexto real
-    playbook.metaSolutions = mappedSolutions.map((ms: EnrichedSolutionMatch) => {
+    // ============================================
+    // COMBINAR SOLUÇÕES EXISTENTES + GERADAS
+    // ============================================
+    
+    // Soluções do banco (origin: 'existing')
+    const existingSolutions = mappedSolutions.map((ms: EnrichedSolutionMatch) => {
       const personalizedDesc = personalizedDescriptions.get(ms.solution.id);
       return {
         pain: ms.pain,
@@ -1354,9 +1624,55 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
         matchScore: ms.matchScore,
         relatedEvidence: ms.relatedEvidence,
         relatedCase: ms.relatedCase,
-        urgencyLevel: ms.urgencyLevel
+        urgencyLevel: ms.urgencyLevel,
+        solutionOrigin: 'existing' as const
       };
     });
+
+    // Soluções geradas via IA (origin: 'generated')
+    const aiGeneratedSolutions = generatedSolutions.map((gs: GeneratedSolution) => {
+      // Determinar urgência para soluções geradas
+      const urgencyLevel = determineUrgencyLevel(gs.pain, leadData.sapStatus, '');
+      
+      return {
+        pain: gs.pain,
+        painConfidence: 'media' as const,
+        solution: gs.solution,
+        description: gs.description,
+        personalizedDescription: gs.description, // Já é personalizada
+        benefits: gs.benefits?.slice(0, 3) || [],
+        matchReason: 'Solução personalizada via IA',
+        matchReasons: ['Criada especificamente para esta dor'],
+        matchScore: 0.85, // Score alto para soluções personalizadas
+        relatedEvidence: gs.connectionToEvidence || undefined,
+        relatedCase: gs.connectionToCase || undefined,
+        urgencyLevel,
+        solutionOrigin: 'generated' as const,
+        solutionType: gs.type,
+        estimatedTimeline: gs.estimatedTimeline
+      };
+    });
+
+    // Combinar e ordenar: urgência crítica primeiro, depois existentes, depois geradas
+    const allSolutions = [...existingSolutions, ...aiGeneratedSolutions];
+    allSolutions.sort((a, b) => {
+      const urgencyOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+      const urgencyA = urgencyOrder[a.urgencyLevel || 'low'];
+      const urgencyB = urgencyOrder[b.urgencyLevel || 'low'];
+      if (urgencyA !== urgencyB) return urgencyB - urgencyA;
+      
+      // Existentes têm prioridade sobre geradas
+      if (a.solutionOrigin !== b.solutionOrigin) {
+        return a.solutionOrigin === 'existing' ? -1 : 1;
+      }
+      
+      return (b.matchScore || 0) - (a.matchScore || 0);
+    });
+
+    // Limitar a 7 soluções
+    playbook.metaSolutions = allSolutions.slice(0, 7);
+    
+    console.log(`Total de soluções: ${playbook.metaSolutions.length} (${existingSolutions.length} existentes + ${aiGeneratedSolutions.length} geradas)`);
 
     // Adicionar cases ranqueados
     playbook.relevantCases = rankedCases.map(rc => ({
@@ -1373,8 +1689,10 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
       roleFocus: roleConfig.focus,
       totalPains: derivedPains.length,
       totalCases: rankedCases.length,
-      totalSolutions: mappedSolutions.length,
-      evidencesFound: realEvidences.length
+      totalSolutions: playbook.metaSolutions.length,
+      evidencesFound: realEvidences.length,
+      existingSolutions: existingSolutions.length,
+      generatedSolutions: aiGeneratedSolutions.length
     };
 
     // Salvar no histórico

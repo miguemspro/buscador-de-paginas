@@ -36,6 +36,9 @@ import {
   ClipboardCheck,
   MoreVertical,
   MessageCircle,
+  Lightbulb,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -639,6 +642,40 @@ ${playbook.approachScript?.fullText || ''}
                       
                       {/* Corpo com Solução */}
                       <div className="p-3 sm:p-4 space-y-3">
+                        {/* Badge de Origem + Nome da Solução */}
+                        <div className="flex items-start gap-2 flex-wrap">
+                          {/* Badge de origem */}
+                          {sol.solutionOrigin === 'generated' ? (
+                            <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 gap-1 text-xs">
+                              <Lightbulb className="h-3 w-3" />
+                              Nova Recomendação
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-green-100 text-green-800 border-green-300 dark:bg-green-950 dark:text-green-300 gap-1 text-xs">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Solução Validada
+                            </Badge>
+                          )}
+                          
+                          {/* Tipo da solução (para geradas) */}
+                          {sol.solutionType && (
+                            <Badge variant="outline" className="text-xs capitalize">
+                              {sol.solutionType === 'diagnostico' && '🔍'}
+                              {sol.solutionType === 'projeto' && '🚀'}
+                              {sol.solutionType === 'servico_continuo' && '🔄'}
+                              {' '}{sol.solutionType.replace('_', ' ')}
+                            </Badge>
+                          )}
+                          
+                          {/* Timeline estimado */}
+                          {sol.estimatedTimeline && (
+                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 gap-1">
+                              <Clock className="h-3 w-3" />
+                              {sol.estimatedTimeline}
+                            </Badge>
+                          )}
+                        </div>
+                        
                         {/* Nome da Solução */}
                         <div className="flex items-start gap-2">
                           <Sparkles className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />

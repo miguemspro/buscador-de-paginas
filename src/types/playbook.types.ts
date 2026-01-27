@@ -75,6 +75,11 @@ export interface MetaSolution {
   relatedEvidence?: string;            // Evidência que confirma a necessidade
   relatedCase?: string;                // Case similar da Meta IT
   urgencyLevel?: 'critical' | 'high' | 'medium' | 'low'; // Nível de urgência
+  
+  // Indicador de origem da solução
+  solutionOrigin?: 'existing' | 'generated'; // 'existing' = do banco, 'generated' = gerada por IA
+  solutionType?: 'diagnostico' | 'projeto' | 'servico_continuo'; // Tipo da solução
+  estimatedTimeline?: string;          // Prazo estimado (para soluções geradas)
 }
 
 // ============================================
