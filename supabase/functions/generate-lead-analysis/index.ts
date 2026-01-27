@@ -1,9 +1,63 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Input validation schema
+const LeadInfoSchema = z.object({
+  name: z.string().max(200).optional(),
+  role: z.string().max(200).optional(),
+  company: z.string().max(200).optional(),
+  linkedinUrl: z.string().max(500).optional(),
+  email: z.string().max(320).optional(),
+  phone: z.string().max(50).optional(),
+  sapStatus: z.string().max(50).optional(),
+  sapVersion: z.string().max(50).optional(),
+  priority: z.string().max(50).optional(),
+  industry: z.string().max(100).optional(),
+  companySize: z.string().max(50).optional(),
+  challenges: z.array(z.string().max(500)).max(20).optional(),
+  publicSignals: z.string().max(10000).optional(),
+  notes: z.string().max(5000).optional(),
+  leadSource: z.string().max(200).optional()
+});
+
+const RequestSchema = z.object({
+  leadInfo: LeadInfoSchema,
+  regenerateSection: z.string().max(50).optional(),
+  currentAnalysis: z.any().optional()
+});
+
+// Authentication helper
+async function verifyAuth(req: Request): Promise<{ userId: string; email: string }> {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    throw new Error('Autenticação necessária');
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } }
+  });
+
+  const token = authHeader.replace('Bearer ', '');
+  const { data, error } = await supabase.auth.getClaims(token);
+  
+  if (error || !data?.claims) {
+    throw new Error('Token inválido ou expirado');
+  }
+
+  return { 
+    userId: data.claims.sub as string, 
+    email: data.claims.email as string 
+  };
+}
 
 const META_IT_INFO = {
   nome: "Meta IT",
@@ -53,11 +107,38 @@ serve(async (req) => {
   }
 
   try {
-    const { leadInfo, regenerateSection, currentAnalysis } = await req.json();
+    // Authentication check
+    let authUser: { userId: string; email: string };
+    try {
+      authUser = await verifyAuth(req);
+      console.log('Usuário autenticado:', authUser.email);
+    } catch (authError) {
+      return new Response(
+        JSON.stringify({ error: 'Autenticação necessária. Faça login para continuar.' }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const body = await req.json();
+    
+    // Input validation
+    const parseResult = RequestSchema.safeParse(body);
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ error: parseResult.error.errors[0]?.message || 'Dados inválidos' }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    const { leadInfo, regenerateSection, currentAnalysis } = parseResult.data;
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY não configurada");
+      console.error("LOVABLE_API_KEY missing");
+      return new Response(
+        JSON.stringify({ error: 'Erro de configuração do serviço' }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     console.log("Gerando análise para lead:", leadInfo.name, "-", leadInfo.company);

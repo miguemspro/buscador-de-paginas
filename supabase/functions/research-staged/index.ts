@@ -1,22 +1,53 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Input validation schema
+const ResearchRequestSchema = z.object({
+  company: z.string().min(1, 'Nome da empresa é obrigatório').max(200),
+  leadName: z.string().max(200).optional(),
+  role: z.string().max(200).optional(),
+  industry: z.string().max(100).optional(),
+  skipCache: z.boolean().optional()
+});
+
+type ResearchRequest = z.infer<typeof ResearchRequestSchema>;
+
+// Authentication helper
+async function verifyAuth(req: Request): Promise<{ userId: string; email: string }> {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    throw new Error('Autenticação necessária');
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } }
+  });
+
+  const token = authHeader.replace('Bearer ', '');
+  const { data, error } = await supabase.auth.getClaims(token);
+  
+  if (error || !data?.claims) {
+    throw new Error('Token inválido ou expirado');
+  }
+
+  return { 
+    userId: data.claims.sub as string, 
+    email: data.claims.email as string 
+  };
+}
+
 // ============================================
 // FASE 1: Pesquisa em Etapas com Cache
 // ============================================
-
-interface ResearchRequest {
-  company: string;
-  leadName?: string;
-  role?: string;
-  industry?: string;
-  skipCache?: boolean;
-}
 
 interface Evidence {
   id: string;
@@ -59,14 +90,42 @@ serve(async (req) => {
   }
 
   try {
-    const { company, leadName, role, industry, skipCache = false }: ResearchRequest = await req.json();
-
-    if (!company) {
+    // Authentication check
+    let authUser: { userId: string; email: string };
+    try {
+      authUser = await verifyAuth(req);
+      console.log('Usuário autenticado:', authUser.email);
+    } catch (authError) {
       return new Response(
-        JSON.stringify({ error: 'company é obrigatório' }),
+        JSON.stringify({ 
+          error: 'Autenticação necessária. Faça login para continuar.',
+          empresa: { evidencias: [], cache_hit: false },
+          lead: { perfil: null, cache_hit: false },
+          setor: { pesquisa: null, cache_hit: false },
+          validacao: { total_links: 0, links_validos: 0, links_invalidos: [] }
+        }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const body = await req.json();
+    
+    // Input validation
+    const parseResult = ResearchRequestSchema.safeParse(body);
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ 
+          error: parseResult.error.errors[0]?.message || 'Dados inválidos',
+          empresa: { evidencias: [], cache_hit: false },
+          lead: { perfil: null, cache_hit: false },
+          setor: { pesquisa: null, cache_hit: false },
+          validacao: { total_links: 0, links_validos: 0, links_invalidos: [] }
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    const { company, leadName, role, industry, skipCache = false } = parseResult.data;
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

@@ -1,52 +1,50 @@
 import type { LeadInfo, LeadAnalysis } from '@/types/lead.types';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+import { supabase } from '@/integrations/supabase/client';
 
 export async function extractLeadFromImage(imageBase64: string): Promise<Partial<LeadInfo>> {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/extract-salesforce-data`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-    },
-    body: JSON.stringify({ imageBase64 }),
+  // Use supabase.functions.invoke which automatically includes auth token
+  const { data, error } = await supabase.functions.invoke('extract-salesforce-data', {
+    body: { imageBase64 },
   });
 
-  if (!response.ok) {
-    if (response.status === 429) {
-      throw new Error('Limite de requisições excedido. Tente novamente em alguns minutos.');
+  if (error) {
+    console.error('Erro na extração:', error);
+    if (error.message?.includes('401') || error.message?.includes('auth')) {
+      throw new Error('Sessão expirada. Faça login novamente.');
     }
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Erro ao extrair dados do print');
+    throw new Error('Falha ao extrair dados da imagem');
   }
 
-  const data = await response.json();
+  if (data?.error) {
+    throw new Error(data.error);
+  }
+
   return data.leadInfo;
 }
 
 export async function generateLeadAnalysis(leadInfo: LeadInfo): Promise<LeadAnalysis> {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-lead-analysis`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-    },
-    body: JSON.stringify({ leadInfo }),
+  const { data, error } = await supabase.functions.invoke('generate-lead-analysis', {
+    body: { leadInfo },
   });
 
-  if (!response.ok) {
-    if (response.status === 429) {
+  if (error) {
+    console.error('Erro na análise:', error);
+    if (error.message?.includes('401') || error.message?.includes('auth')) {
+      throw new Error('Sessão expirada. Faça login novamente.');
+    }
+    if (error.message?.includes('429')) {
       throw new Error('Limite de requisições excedido. Tente novamente em alguns minutos.');
     }
-    if (response.status === 402) {
+    if (error.message?.includes('402')) {
       throw new Error('Créditos insuficientes. Adicione créditos na sua conta.');
     }
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Erro ao gerar análise');
+    throw new Error('Erro ao gerar análise');
   }
 
-  const data = await response.json();
+  if (data?.error) {
+    throw new Error(data.error);
+  }
+
   return data.analysis;
 }
 
@@ -55,30 +53,31 @@ export async function regenerateSection(
   sectionId: string,
   currentAnalysis: LeadAnalysis
 ): Promise<LeadAnalysis> {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-lead-analysis`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-    },
-    body: JSON.stringify({ 
+  const { data, error } = await supabase.functions.invoke('generate-lead-analysis', {
+    body: { 
       leadInfo, 
       regenerateSection: sectionId,
       currentAnalysis 
-    }),
+    },
   });
 
-  if (!response.ok) {
-    if (response.status === 429) {
+  if (error) {
+    console.error('Erro na regeneração:', error);
+    if (error.message?.includes('401') || error.message?.includes('auth')) {
+      throw new Error('Sessão expirada. Faça login novamente.');
+    }
+    if (error.message?.includes('429')) {
       throw new Error('Limite de requisições excedido. Tente novamente em alguns minutos.');
     }
-    if (response.status === 402) {
+    if (error.message?.includes('402')) {
       throw new Error('Créditos insuficientes. Adicione créditos na sua conta.');
     }
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Erro ao regenerar seção');
+    throw new Error('Erro ao regenerar seção');
   }
 
-  const data = await response.json();
+  if (data?.error) {
+    throw new Error(data.error);
+  }
+
   return data.analysis;
 }
