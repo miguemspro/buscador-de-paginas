@@ -592,45 +592,114 @@ ${playbook.approachScript?.fullText || ''}
               </button>
               
               {expandedSections.solutions && (
-                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+                <div className="space-y-4">
                   {playbook.metaSolutions?.map((sol, i) => (
-                    <div key={i} className="border rounded-lg overflow-hidden">
-                      <div className="bg-destructive/10 px-3 sm:px-4 py-2 border-b flex items-center justify-between">
-                        <p className="text-xs font-medium text-destructive truncate flex-1">Dor: {sol.pain}</p>
-                        {sol.matchScore && (
-                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 ml-2 flex-shrink-0">
-                            {Math.round(sol.matchScore * 100)}% match
-                          </Badge>
-                        )}
+                    <div key={i} className="border rounded-lg overflow-hidden bg-card">
+                      {/* Header com Dor e Urgência */}
+                      <div className={cn(
+                        "px-3 sm:px-4 py-2.5 border-b flex items-center justify-between gap-2 flex-wrap",
+                        sol.urgencyLevel === 'critical' && "bg-red-50 dark:bg-red-950/30",
+                        sol.urgencyLevel === 'high' && "bg-orange-50 dark:bg-orange-950/30",
+                        sol.urgencyLevel === 'medium' && "bg-amber-50 dark:bg-amber-950/30",
+                        sol.urgencyLevel === 'low' && "bg-muted/50"
+                      )}>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <AlertTriangle className={cn(
+                            "h-4 w-4 flex-shrink-0",
+                            sol.urgencyLevel === 'critical' && "text-red-600",
+                            sol.urgencyLevel === 'high' && "text-orange-600",
+                            sol.urgencyLevel === 'medium' && "text-amber-600",
+                            sol.urgencyLevel === 'low' && "text-muted-foreground"
+                          )} />
+                          <p className="text-sm font-medium truncate">{sol.pain}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {sol.urgencyLevel && sol.urgencyLevel !== 'low' && (
+                            <Badge 
+                              variant="outline" 
+                              className={cn(
+                                "text-xs",
+                                sol.urgencyLevel === 'critical' && "bg-red-100 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-300",
+                                sol.urgencyLevel === 'high' && "bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-950 dark:text-orange-300",
+                                sol.urgencyLevel === 'medium' && "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-300"
+                              )}
+                            >
+                              {sol.urgencyLevel === 'critical' && '🔴 Crítico'}
+                              {sol.urgencyLevel === 'high' && '🟠 Alta'}
+                              {sol.urgencyLevel === 'medium' && '🟡 Média'}
+                            </Badge>
+                          )}
+                          {sol.matchScore && (
+                            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300">
+                              {Math.round(sol.matchScore * 100)}% match
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <div className="p-3 sm:p-4 space-y-2">
-                        <p className="font-semibold text-sm text-primary">{sol.solution}</p>
-                        <p className="text-xs text-muted-foreground">{sol.description}</p>
+                      
+                      {/* Corpo com Solução */}
+                      <div className="p-3 sm:p-4 space-y-3">
+                        {/* Nome da Solução */}
+                        <div className="flex items-start gap-2">
+                          <Sparkles className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                          <h3 className="font-semibold text-primary">{sol.solution}</h3>
+                        </div>
+                        
+                        {/* Descrição Personalizada ou Padrão */}
+                        <p className="text-sm text-foreground leading-relaxed">
+                          {sol.personalizedDescription || sol.description}
+                        </p>
                         
                         {/* Benefícios */}
                         {sol.benefits && sol.benefits.length > 0 && (
                           <div className="pt-2 border-t border-dashed">
                             <p className="text-xs font-medium text-muted-foreground mb-1.5">Benefícios:</p>
-                            <ul className="space-y-0.5">
+                            <ul className="space-y-1">
                               {sol.benefits.slice(0, 3).map((benefit, j) => (
-                                <li key={j} className="text-xs text-foreground flex items-start gap-1">
-                                  <span className="text-primary">✓</span>
-                                  <span className="line-clamp-1">{benefit}</span>
+                                <li key={j} className="text-sm text-foreground flex items-start gap-1.5">
+                                  <Check className="h-3.5 w-3.5 text-green-600 mt-0.5 flex-shrink-0" />
+                                  <span>{benefit}</span>
                                 </li>
                               ))}
                             </ul>
                           </div>
                         )}
                         
-                        {/* Match Reason */}
-                        {sol.matchReason && (
-                          <p className="text-xs text-primary/80 italic pt-1">
-                            {sol.matchReason}
-                          </p>
-                        )}
+                        {/* Footer com Evidência, Case e Match Reason */}
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+                          {/* Match Reasons como tags */}
+                          {sol.matchReason && (
+                            <Badge variant="secondary" className="text-xs">
+                              {sol.matchReason}
+                            </Badge>
+                          )}
+                          
+                          {/* Evidência relacionada */}
+                          {sol.relatedEvidence && (
+                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300">
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              {sol.relatedEvidence.length > 30 ? sol.relatedEvidence.substring(0, 30) + '...' : sol.relatedEvidence}
+                            </Badge>
+                          )}
+                          
+                          {/* Case relacionado */}
+                          {sol.relatedCase && (
+                            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300">
+                              <Award className="h-3 w-3 mr-1" />
+                              Case: {sol.relatedCase}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
+                  
+                  {/* Mensagem se não houver soluções */}
+                  {(!playbook.metaSolutions || playbook.metaSolutions.length === 0) && (
+                    <p className="text-sm text-muted-foreground italic text-center py-4">
+                      Nenhuma solução mapeada. Execute o discovery para identificar oportunidades.
+                    </p>
+                  )}
                 </div>
               )}
             </Card>

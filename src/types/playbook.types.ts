@@ -63,12 +63,18 @@ export interface ProbablePain {
 // 4) COMO A META PODE AJUDAR - Baseado nas dores e contexto
 // ============================================
 export interface MetaSolution {
-  pain: string;                // Dor correspondente
-  solution: string;            // Solução Meta IT
-  description: string;         // Resultado esperado ou descrição
-  benefits?: string[];         // Top 3 benefícios da solução
-  matchReason?: string;        // Motivo do match (ex: "Dor mapeada: migração")
-  matchScore?: number;         // Score de compatibilidade (0-1)
+  pain: string;                        // Dor correspondente
+  painConfidence?: 'alta' | 'media' | 'baixa'; // Confiança da dor
+  solution: string;                    // Solução Meta IT
+  description: string;                 // Resultado esperado ou descrição
+  personalizedDescription?: string;    // Descrição personalizada gerada por IA
+  benefits?: string[];                 // Top 3 benefícios da solução
+  matchReason?: string;                // Motivo do match (ex: "Dor mapeada: migração")
+  matchReasons?: string[];             // Múltiplos motivos do match
+  matchScore?: number;                 // Score de compatibilidade (0-1)
+  relatedEvidence?: string;            // Evidência que confirma a necessidade
+  relatedCase?: string;                // Case similar da Meta IT
+  urgencyLevel?: 'critical' | 'high' | 'medium' | 'low'; // Nível de urgência
 }
 
 // ============================================
