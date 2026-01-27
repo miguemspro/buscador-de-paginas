@@ -1,9 +1,54 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Input validation schema - allow both data URL and raw base64
+const ImageSchema = z.object({
+  imageBase64: z.string()
+    .min(100, 'Imagem muito pequena')
+    .max(15 * 1024 * 1024, 'Imagem muito grande (máx 10MB)')
+    .refine(
+      (val) => {
+        // Check if it's a valid data URL or raw base64
+        const isDataUrl = val.startsWith('data:image/');
+        const isRawBase64 = /^[A-Za-z0-9+/=]+$/.test(val.replace(/\s/g, ''));
+        return isDataUrl || isRawBase64;
+      },
+      { message: 'Formato de imagem inválido' }
+    )
+});
+
+// Authentication helper
+async function verifyAuth(req: Request): Promise<{ userId: string; email: string }> {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    throw new Error('Autenticação necessária');
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } }
+  });
+
+  const token = authHeader.replace('Bearer ', '');
+  const { data, error } = await supabase.auth.getClaims(token);
+  
+  if (error || !data?.claims) {
+    throw new Error('Token inválido ou expirado');
+  }
+
+  return { 
+    userId: data.claims.sub as string, 
+    email: data.claims.email as string 
+  };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -11,11 +56,38 @@ serve(async (req) => {
   }
 
   try {
-    const { imageBase64 } = await req.json();
+    // Authentication check
+    let authUser: { userId: string; email: string };
+    try {
+      authUser = await verifyAuth(req);
+      console.log('Usuário autenticado:', authUser.email);
+    } catch (authError) {
+      return new Response(
+        JSON.stringify({ error: 'Autenticação necessária. Faça login para continuar.' }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const body = await req.json();
+    
+    // Input validation
+    const parseResult = ImageSchema.safeParse(body);
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ error: parseResult.error.errors[0]?.message || 'Dados inválidos' }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    const { imageBase64 } = parseResult.data;
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY não configurada");
+      console.error("LOVABLE_API_KEY missing");
+      return new Response(
+        JSON.stringify({ error: 'Erro de configuração do serviço' }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     console.log("Extraindo dados do print do Salesforce...");

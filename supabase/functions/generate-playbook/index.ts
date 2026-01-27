@@ -1,10 +1,78 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// ============================================
+// AUTHENTICATION & VALIDATION
+// ============================================
+
+// Zod schema for input validation
+const LeadDataSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  company: z.string().min(1).max(200).optional(),
+  role: z.string().max(200).optional(),
+  email: z.string().max(320).optional(),
+  phone: z.string().max(50).optional(),
+  linkedinUrl: z.string().max(500).optional(),
+  industry: z.string().max(100).optional(),
+  sapStatus: z.string().max(50).optional(),
+  companySize: z.string().max(50).optional(),
+  projectType: z.string().max(100).optional(),
+  sapModules: z.array(z.string().max(50)).max(20).optional(),
+  challenges: z.array(z.string().max(200)).max(10).optional(),
+  publicSignals: z.string().max(10000).optional(),
+  notes: z.string().max(5000).optional(),
+  leadSource: z.string().max(200).optional(),
+  leadOwner: z.string().max(200).optional(),
+  priority: z.string().max(50).optional(),
+});
+
+type LeadDataInput = z.infer<typeof LeadDataSchema>;
+
+// Authentication helper
+async function verifyAuth(req: Request): Promise<{ userId: string; email: string }> {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    throw new Error('Autenticação necessária');
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } }
+  });
+
+  const token = authHeader.replace('Bearer ', '');
+  const { data, error } = await supabase.auth.getClaims(token);
+  
+  if (error || !data?.claims) {
+    console.error('Auth error:', error);
+    throw new Error('Token inválido ou expirado');
+  }
+
+  return { 
+    userId: data.claims.sub as string, 
+    email: data.claims.email as string 
+  };
+}
+
+// Safe error message helper - don't expose internal details
+function getSafeErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes('api_key') || msg.includes('apikey')) return 'Erro de configuração do serviço';
+    if (msg.includes('token') || msg.includes('auth')) return 'Erro de autenticação';
+    if (msg.includes('timeout')) return 'Tempo limite excedido';
+    if (msg.includes('rate limit')) return 'Limite de requisições excedido';
+  }
+  return 'Erro interno do servidor';
+}
 
 // ============================================
 // 2.4 - SENSIBILIDADE A CARGO
@@ -1239,20 +1307,48 @@ serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
-    const leadData = body.leadData || body;
-    
-    if (!leadData || typeof leadData !== 'object') {
-      console.error('leadData inválido:', body);
+    // Authentication check
+    let authUser: { userId: string; email: string };
+    try {
+      authUser = await verifyAuth(req);
+      console.log('Usuário autenticado:', authUser.email);
+    } catch (authError) {
+      console.error('Auth failed:', authError);
       return new Response(
-        JSON.stringify({ error: 'leadData é obrigatório' }),
+        JSON.stringify({ error: 'Autenticação necessária. Faça login para continuar.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const body = await req.json();
+    const rawLeadData = body.leadData || body;
+    
+    // Input validation with Zod
+    const parseResult = LeadDataSchema.safeParse(rawLeadData);
+    if (!parseResult.success) {
+      console.error('Validation error:', parseResult.error.errors);
+      return new Response(
+        JSON.stringify({ error: 'Dados inválidos', details: parseResult.error.errors.map(e => e.message) }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    const leadData = parseResult.data as LeadDataInput;
+    
+    if (!leadData.company) {
+      return new Response(
+        JSON.stringify({ error: 'Nome da empresa é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY não configurada');
+      console.error('LOVABLE_API_KEY missing');
+      return new Response(
+        JSON.stringify({ error: 'Erro de configuração do serviço' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // 2.4 - Classificar cargo do lead
