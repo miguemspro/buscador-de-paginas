@@ -204,6 +204,49 @@ async function rankCasesBySimilarity(
 }
 
 // ============================================
+// FILTRO DE COMPATIBILIDADE SAP
+// ============================================
+// Palavras-chave de soluções de MIGRAÇÃO para S/4HANA
+const S4_MIGRATION_KEYWORDS = [
+  'migração s/4',
+  'migração s4',
+  'migração para s/4',
+  'conversão s/4',
+  'conversão s4',
+  'brownfield',
+  'greenfield',
+  'upgrade para s/4',
+  'move to s/4',
+  'journey to s/4',
+  'transição para s/4',
+  'migração sap s/4',
+  'migração sap s4',
+  'conversão para s/4'
+];
+
+function isMigrationToS4Solution(solutionName: string): boolean {
+  const nameLower = solutionName.toLowerCase();
+  return S4_MIGRATION_KEYWORDS.some(keyword => nameLower.includes(keyword));
+}
+
+function isSolutionCompatibleWithSapStatus(
+  solutionName: string, 
+  sapStatus: string | undefined
+): boolean {
+  if (!sapStatus) return true; // Se não soubermos o status, permitir tudo
+  
+  const sapLower = sapStatus.toLowerCase();
+  const isS4 = sapLower.includes('s/4') || sapLower.includes('s4hana');
+  
+  // Se cliente está em S/4HANA, excluir soluções de migração PARA S/4
+  if (isS4 && isMigrationToS4Solution(solutionName)) {
+    return false;
+  }
+  
+  return true;
+}
+
+// ============================================
 // 2.2 - MOTOR DE DORES PROVÁVEIS
 // ============================================
 interface PainEvidence {
@@ -584,7 +627,7 @@ async function findRelevantSolutionsEnriched(
     .map(([name]) => name);
 
   // Filtrar soluções por cargo - CORRIGIDO com mapeamento
-  const filteredSolutions = solutions.filter((sol: MetaSolution) => {
+  const filteredByRole = solutions.filter((sol: MetaSolution) => {
     if (!sol.target_roles || sol.target_roles.length === 0) return true;
     
     // Verificar se algum target_role da solução corresponde às categorias permitidas
@@ -593,7 +636,18 @@ async function findRelevantSolutionsEnriched(
     );
   });
 
-  console.log(`Soluções filtradas por cargo (nível ${roleLevel}): ${filteredSolutions.length} de ${solutions.length}`);
+  console.log(`Soluções filtradas por cargo (nível ${roleLevel}): ${filteredByRole.length} de ${solutions.length}`);
+
+  // FILTRO DE COMPATIBILIDADE SAP: Excluir soluções de migração S/4 para clientes já em S/4
+  const filteredSolutions = filteredByRole.filter((sol: MetaSolution) => {
+    const isCompatible = isSolutionCompatibleWithSapStatus(sol.name, companyContext.sapStatus);
+    if (!isCompatible) {
+      console.log(`Solução "${sol.name}" excluída - incompatível com status SAP: ${companyContext.sapStatus}`);
+    }
+    return isCompatible;
+  });
+
+  console.log(`Soluções após filtro SAP: ${filteredSolutions.length} de ${filteredByRole.length}`);
 
   // Contexto para scoring
   const sapStatusLower = (companyContext.sapStatus || '').toLowerCase();
@@ -892,13 +946,22 @@ Para cada dor sem solução mapeada, crie UMA solução personalizada seguindo e
    - Evitar: ${roleConfig.excludeTopics.join(', ')}
 
 4. REALISMO - Só sugerir o que a Meta IT realmente pode entregar:
-   - Migração SAP S/4HANA (Brownfield/Greenfield)
+${isS4 ? `   - ATENÇÃO: O cliente JÁ ESTÁ EM S/4HANA. NÃO sugira migração, conversão ou upgrade para S/4HANA.
+   - Otimização e tuning de S/4HANA
+   - Estabilização pós-go-live
+   - Rollout de novas funcionalidades S/4
+   - Expansão de módulos SAP` : `   - Migração SAP S/4HANA (Brownfield/Greenfield)`}
    - AMS (Application Management Services)
    - Outsourcing de equipe SAP
    - SAP BTP e integrações
    - Adequação à Reforma Tributária
    - Rollouts internacionais
    - Consultoria e diagnósticos
+${isS4 ? `
+5. RESTRIÇÃO CRÍTICA: O cliente JÁ ESTÁ EM S/4HANA.
+   - NÃO sugira migração, conversão ou upgrade para S/4HANA
+   - Foque em: otimização, estabilização, novos módulos, integrações, BTP
+   - Válido: AMS, Outsourcing, Rollouts, Reforma Tributária, expansões` : ''}
 </rules>
 
 <examples>
@@ -977,8 +1040,17 @@ EXEMPLO BOM (personalizado):
         const parsed = JSON.parse(toolCall.function.arguments);
         
         if (parsed.solutions && Array.isArray(parsed.solutions)) {
-          console.log(`Soluções geradas via IA: ${parsed.solutions.length}`);
-          return parsed.solutions;
+          // VALIDAÇÃO DE SAÍDA: Filtrar soluções incompatíveis geradas pela IA
+          const compatibleSolutions = parsed.solutions.filter((sol: GeneratedSolution) => {
+            const isCompatible = isSolutionCompatibleWithSapStatus(sol.solution, context.sapStatus);
+            if (!isCompatible) {
+              console.log(`Solução gerada "${sol.solution}" descartada - incompatível com S/4HANA`);
+            }
+            return isCompatible;
+          });
+          
+          console.log(`Soluções geradas via IA: ${parsed.solutions.length}, compatíveis: ${compatibleSolutions.length}`);
+          return compatibleSolutions;
         }
       }
     } else {
