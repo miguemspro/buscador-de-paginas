@@ -1969,7 +1969,7 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
+        model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: buildSystemPrompt(roleConfig) },
           { role: 'user', content: userPrompt }
@@ -2086,9 +2086,11 @@ Gere o playbook completo com as 5 seções (sem texto de abordagem).`;
     console.log('Resposta da API recebida');
     
     // Verificar se a resposta contém erro (mesmo com status 200)
-    if (result.error) {
-      console.error('Erro na resposta da API:', JSON.stringify(result.error));
-      throw new Error(result.error.message || 'Erro interno do servidor de IA');
+    // A API pode retornar erro em diferentes formatos
+    if (result.error || result.code === 500 || result.message === 'Internal Server Error') {
+      const errorMsg = result.error?.message || result.message || 'Erro interno do servidor de IA';
+      console.error('Erro na resposta da API:', JSON.stringify(result));
+      throw new Error(errorMsg);
     }
 
     const toolCall = result.choices?.[0]?.message?.tool_calls?.[0];
