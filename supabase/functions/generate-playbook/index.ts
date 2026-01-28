@@ -1103,7 +1103,8 @@ async function findRelevantSolutionsEnriched(
   const isECC = sapDetection ? sapDetection.s4hanaProbability <= 30 : false;
   const isS4 = sapDetection ? sapDetection.s4hanaProbability >= 60 : false;
   const industryLower = (companyContext.industry || '').toLowerCase();
-  const evidencesText = evidences.map(e => `${e.title} ${e.indication}`).join(' ').toLowerCase();
+  const companyEvidences = companyContext.evidences || [];
+  const evidencesText = companyEvidences.map((e: { title: string; indication: string }) => `${e.title} ${e.indication}`).join(' ').toLowerCase();
 
   // Mapear dores para soluções com scoring multicritério
   const enrichedMatches: EnrichedSolutionMatch[] = [];
@@ -1188,7 +1189,7 @@ async function findRelevantSolutionsEnriched(
       }
 
       // ========== 4. EVIDÊNCIAS CONFIRMAM (peso: 0.20) ==========
-      if (evidences.length > 0) {
+      if (companyEvidences.length > 0) {
         const solKeywords = [
           ...(sol.related_pains || []),
           ...(sol.use_cases || []),
@@ -1236,7 +1237,7 @@ async function findRelevantSolutionsEnriched(
       // Threshold mínimo aumentado para 0.35
       if (score > 0.35 && (!bestMatch || score > bestMatch.matchScore)) {
         const urgencyLevel = determineUrgencyLevel(pain, companyContext.sapStatus, evidencesText);
-        const relatedEvidence = findRelatedEvidence(pain, evidences);
+        const relatedEvidence = findRelatedEvidence(pain, companyEvidences);
         const relatedCase = findRelatedCase(sol, rankedCases);
         
         bestMatch = {
@@ -1316,8 +1317,8 @@ async function generateNewSolutions(
   
   // Construir análise do cenário - USAR DETECÇÃO INTELIGENTE
   const effectiveStatus = getEffectiveSapStatus(context.sapStatus, evidences);
-  const isECC = effectiveStatus.isECC;
-  const isS4 = effectiveStatus.isS4;
+  const isECC = isEffectivelyECC(effectiveStatus);
+  const isS4 = isEffectivelyS4(effectiveStatus);
   
   console.log(`[generateNewSolutions] Status efetivo: isS4=${isS4}, isECC=${isECC}, fonte=${effectiveStatus.source}`);
   
@@ -1491,8 +1492,9 @@ EXEMPLO BOM (personalizado):
         
         if (parsed.solutions && Array.isArray(parsed.solutions)) {
           // VALIDAÇÃO DE SAÍDA: Filtrar soluções incompatíveis usando detecção inteligente
+          const sapDetection = getEffectiveSapStatus(context.sapStatus, evidences);
           const compatibleSolutions = parsed.solutions.filter((sol: GeneratedSolution) => {
-            const isCompatible = isSolutionCompatibleWithSapStatus(sol.solution, context.sapStatus, evidences);
+            const isCompatible = isSolutionCompatibleWithSapStatus(sol.solution, sapDetection);
             if (!isCompatible) {
               console.log(`Solução gerada "${sol.solution}" descartada - incompatível com status SAP efetivo (S/4HANA)`);
             }
