@@ -622,68 +622,12 @@ ${playbook.approachScript?.fullText || ''}
                             sol.urgencyLevel === 'medium' && "text-amber-600",
                             sol.urgencyLevel === 'low' && "text-muted-foreground"
                           )} />
-                          <p className="text-sm font-medium truncate">{sol.pain}</p>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {sol.urgencyLevel && sol.urgencyLevel !== 'low' && (
-                            <Badge 
-                              variant="outline" 
-                              className={cn(
-                                "text-xs",
-                                sol.urgencyLevel === 'critical' && "bg-red-100 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-300",
-                                sol.urgencyLevel === 'high' && "bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-950 dark:text-orange-300",
-                                sol.urgencyLevel === 'medium' && "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-300"
-                              )}
-                            >
-                              {sol.urgencyLevel === 'critical' && '🔴 Crítico'}
-                              {sol.urgencyLevel === 'high' && '🟠 Alta'}
-                              {sol.urgencyLevel === 'medium' && '🟡 Média'}
-                            </Badge>
-                          )}
-                          {sol.matchScore && (
-                            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300">
-                              {Math.round(sol.matchScore * 100)}% match
-                            </Badge>
-                          )}
+                          <p className="text-sm font-medium truncate">{sol.pain?.replace(/\s*\((alta|media|baixa)\)\s*$/i, '')}</p>
                         </div>
                       </div>
                       
                       {/* Corpo com Solução */}
                       <div className="p-3 sm:p-4 space-y-3">
-                        {/* Badge de Origem + Nome da Solução */}
-                        <div className="flex items-start gap-2 flex-wrap">
-                          {/* Badge de origem */}
-                          {sol.solutionOrigin === 'generated' ? (
-                            <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 gap-1 text-xs">
-                              <Lightbulb className="h-3 w-3" />
-                              Nova Recomendação
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-green-100 text-green-800 border-green-300 dark:bg-green-950 dark:text-green-300 gap-1 text-xs">
-                              <CheckCircle2 className="h-3 w-3" />
-                              Solução Validada
-                            </Badge>
-                          )}
-                          
-                          {/* Tipo da solução (para geradas) */}
-                          {sol.solutionType && (
-                            <Badge variant="outline" className="text-xs capitalize">
-                              {sol.solutionType === 'diagnostico' && '🔍'}
-                              {sol.solutionType === 'projeto' && '🚀'}
-                              {sol.solutionType === 'servico_continuo' && '🔄'}
-                              {' '}{sol.solutionType.replace('_', ' ')}
-                            </Badge>
-                          )}
-                          
-                          {/* Timeline estimado */}
-                          {sol.estimatedTimeline && (
-                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 gap-1">
-                              <Clock className="h-3 w-3" />
-                              {sol.estimatedTimeline}
-                            </Badge>
-                          )}
-                        </div>
-                        
                         {/* Nome da Solução */}
                         <div className="flex items-start gap-2">
                           <Sparkles className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
@@ -710,31 +654,6 @@ ${playbook.approachScript?.fullText || ''}
                           </div>
                         )}
                         
-                        {/* Footer com Evidência, Case e Match Reason */}
-                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
-                          {/* Match Reasons como tags */}
-                          {sol.matchReason && (
-                            <Badge variant="secondary" className="text-xs">
-                              {sol.matchReason}
-                            </Badge>
-                          )}
-                          
-                          {/* Evidência relacionada */}
-                          {sol.relatedEvidence && (
-                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300">
-                              <ExternalLink className="h-3 w-3 mr-1" />
-                              {sol.relatedEvidence.length > 30 ? sol.relatedEvidence.substring(0, 30) + '...' : sol.relatedEvidence}
-                            </Badge>
-                          )}
-                          
-                          {/* Case relacionado */}
-                          {sol.relatedCase && (
-                            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300">
-                              <Award className="h-3 w-3 mr-1" />
-                              Case: {sol.relatedCase}
-                            </Badge>
-                          )}
-                        </div>
                       </div>
                     </div>
                   ))}
@@ -768,13 +687,8 @@ ${playbook.approachScript?.fullText || ''}
                   <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                     {playbook.relevantCases?.map((caseItem, i) => (
                       <div key={i} className="border rounded-lg overflow-hidden bg-gradient-to-br from-amber-50/50 to-orange-50/50 dark:from-amber-950/20 dark:to-orange-950/20">
-                        <div className="bg-amber-100/80 dark:bg-amber-900/40 px-3 sm:px-4 py-2 border-b border-amber-200 dark:border-amber-800 flex items-center justify-between gap-2">
+                        <div className="bg-amber-100/80 dark:bg-amber-900/40 px-3 sm:px-4 py-2 border-b border-amber-200 dark:border-amber-800">
                           <p className="font-semibold text-sm truncate">{caseItem.company}</p>
-                          {caseItem.score && (
-                            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300 flex-shrink-0">
-                              {(caseItem.score * 100).toFixed(0)}%
-                            </Badge>
-                          )}
                         </div>
                         <div className="p-3 sm:p-4 space-y-2">
                           <p className="text-sm font-medium">{caseItem.title}</p>
